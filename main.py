@@ -1,5 +1,11 @@
+import os
 import time
 import dotmatrix.dot_matrix as DotMatrix
+
+# Set up pygame for headless/framebuffer operation on Raspberry Pi
+os.environ['SDL_VIDEODRIVER'] = 'dummy'
+# Suppress pygame welcome message
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 friendly_current_time = time.time()
 sleep_duration_secs = 1

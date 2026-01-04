@@ -134,13 +134,16 @@ class DotMatrix:
         self.convert_canvas_to_matrix(source_canvas)
 
     def wait_for_exit(self):
-        while self.running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.handle_click(event.pos)
-            
-            self.clock.tick(40)  # 40 FPS
-        
-        pygame.quit()
+        try:
+            while self.running:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        self.handle_click(event.pos)
+                
+                self.clock.tick(40)  # 40 FPS
+        except KeyboardInterrupt:
+            pass
+        finally:
+            pygame.quit()
