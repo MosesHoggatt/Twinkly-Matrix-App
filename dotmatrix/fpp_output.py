@@ -1,0 +1,123 @@
+"""FPP (Falcon Player Protocol) output handling with numpy-optimized path."""
+
+import mmap
+import os
+import time
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+from .light_wall_mapping import load_light_wall_mapping
+
+
+class FPPOutput:
+    """Handles FPP memory-mapped output with optional numpy fast path."""
+
+    def __init__(self, width, height, mapping_file="/dev/shm/FPP-Model-Data-Light_Wall"):
+        self.width = width
+        self.height = height
+        self.buffer_size = width * height * 3
+        self.buffer = bytearray(self.buffer_size)
+        self.memory_map = None
+        self.file_handle = None
+        self.routing_table = {}
+        self._fast_dest = None  # numpy-optimized destination indices
+        self._fast_src = None   # numpy-optimized source indices (flattened)
+        self._buffer_view = None  # numpy view over self.buffer for vectorized writes
+
+        # Load mapping and initialize
+        self.mapping = load_light_wall_mapping()
+        self._initialize_memory_map(mapping_file)
+        self._build_routing_table()
+
+    def _initialize_memory_map(self, fpp_file):
+        """Initialize memory-mapped file for FPP output."""
+        try:
+            if not os.path.exists(fpp_file) or os.path.getsize(fpp_file) != self.buffer_size:
+                with open(fpp_file, 'wb') as f:
+                    f.write(b'\x00' * self.buffer_size)
+
+            self.file_handle = open(fpp_file, 'r+b')
+            self.memory_map = mmap.mmap(self.file_handle.fileno(), self.buffer_size)
+        except PermissionError:
+            print(f"FPP Error: Permission denied accessing {fpp_file}")
+            print(f"Fix: sudo chmod 666 {fpp_file}")
+            self._cleanup()
+        except Exception as e:
+            print(f"FPP Error: {e}")
+            self._cleanup()
+
+    def _build_routing_table(self):
+        """Pre-compute routing from visual grid to FPP buffer positions."""
+        if not self.mapping:
+            return
+
+        dest_indices = []
+        src_indices = []
+        for visual_row in range(self.height):
+            for visual_col in range(self.width):
+                byte_indices = []
+
+                for row_offset in range(2):  # Each visual cell maps to 2 physical LED rows
+                    physical_row = visual_row * 2 + row_offset
+                    physical_col = visual_col
+
+                    if (physical_row, physical_col) in self.mapping:
+                        pixel_idx = self.mapping[(physical_row, physical_col)]
+                        if 0 <= pixel_idx < 4500:
+                            byte_indices.append(pixel_idx * 3)
+                            dest_indices.append(pixel_idx)
+                            src_indices.append(visual_row * self.width + visual_col)
+
+                if byte_indices:
+                    self.routing_table[(visual_row, visual_col)] = byte_indices
+
+        if HAS_NUMPY and dest_indices:
+            self._fast_dest = np.array(dest_indices, dtype=np.int32)
+            self._fast_src = np.array(src_indices, dtype=np.int32)
+            self._buffer_view = np.frombuffer(self.buffer, dtype=np.uint8).reshape(-1, 3)
+
+    def write(self, dot_colors):
+        """Write color data to FPP buffer and flush to memory map."""
+        if not self.memory_map:
+            return 0.0
+
+        start = time.perf_counter()
+
+        if HAS_NUMPY and isinstance(dot_colors, np.ndarray) and self._fast_dest is not None:
+            colors_flat = dot_colors.reshape(-1, 3)
+            self._buffer_view[self._fast_dest] = colors_flat[self._fast_src]
+        elif HAS_NUMPY and isinstance(dot_colors, np.ndarray):
+            for (row, col), byte_indices in self.routing_table.items():
+                pixel = dot_colors[row, col]
+                r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
+                for byte_idx in byte_indices:
+                    self.buffer[byte_idx] = r
+                    self.buffer[byte_idx + 1] = g
+                    self.buffer[byte_idx + 2] = b
+        else:
+            for (row, col), byte_indices in self.routing_table.items():
+                r, g, b = dot_colors[row][col]
+                for byte_idx in byte_indices:
+                    self.buffer[byte_idx] = r
+                    self.buffer[byte_idx + 1] = g
+                    self.buffer[byte_idx + 2] = b
+
+        self.memory_map.seek(0)
+        self.memory_map.write(self.buffer)
+        return (time.perf_counter() - start) * 1000
+
+    def close(self):
+        """Clean up resources."""
+        self._cleanup()
+
+    def _cleanup(self):
+        if self.memory_map:
+            self.memory_map.close()
+            self.memory_map = None
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None

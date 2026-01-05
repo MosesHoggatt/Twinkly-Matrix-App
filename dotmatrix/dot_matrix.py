@@ -7,8 +7,6 @@ Supports both visual preview (pygame window) and FPP memory-mapped output for LE
 
 import pygame
 import time
-import mmap
-import os
 try:
     import numpy as np
     import pygame.surfarray as surfarray
@@ -17,198 +15,8 @@ except ImportError:
     HAS_NUMPY = False
 
 from .source_canvas import CanvasSource, SourcePreview
-from .light_wall_mapping import load_light_wall_mapping
-
-
-class PerformanceMonitor:
-    """Tracks and reports rendering performance metrics."""
-    
-    def __init__(self, enabled=True):
-        self.enabled = enabled
-        self.frame_count = 0
-        self.last_log_time = time.time()
-        self.stage_timings = {
-            'scaling': [],
-            'sampling_blend': [],
-            'visualization': [],
-            'fpp_write': [],
-            'total': []
-        }
-    
-    def record(self, stage, duration_ms):
-        """Record timing for a stage."""
-        if self.enabled:
-            self.stage_timings[stage].append(duration_ms)
-    
-    def frame_complete(self):
-        """Mark frame as complete and log if needed."""
-        if not self.enabled:
-            return
-            
-        self.frame_count += 1
-        current_time = time.time()
-        elapsed = current_time - self.last_log_time
-        
-        if elapsed >= 1.0:
-            self._log_performance(elapsed)
-            self._reset()
-            self.last_log_time = current_time
-    
-    def _log_performance(self, elapsed):
-        """Print performance report."""
-        if self.frame_count == 0:
-            return
-            
-        fps = self.frame_count / elapsed
-        print(f"\n{'='*60}")
-        print(f"Performance Report (Last {elapsed:.2f}s)")
-        print(f"Average FPS: {fps:.2f} | Frame Count: {self.frame_count}")
-        print(f"\nStage Latencies (average):")
-        
-        for stage, times in self.stage_timings.items():
-            if times:
-                avg = sum(times) / len(times)
-                min_t = min(times)
-                max_t = max(times)
-                print(f"  {stage:20s}: {avg:6.2f}ms (min: {min_t:5.2f}ms, max: {max_t:5.2f}ms)")
-        
-        if self.stage_timings['total']:
-            avg_total = sum(self.stage_timings['total']) / len(self.stage_timings['total'])
-            print(f"\nFrame budget: 25.00ms (40 FPS target)")
-            print(f"Headroom: {25.0 - avg_total:6.2f}ms")
-        print(f"{'='*60}\n")
-    
-    def _reset(self):
-        """Reset counters for next period."""
-        self.frame_count = 0
-        for stage in self.stage_timings:
-            self.stage_timings[stage].clear()
-
-
-class FPPOutput:
-    """Handles FPP (Falcon Player Protocol) memory-mapped output."""
-    
-    def __init__(self, width, height, mapping_file="/dev/shm/FPP-Model-Data-Light_Wall"):
-        self.width = width
-        self.height = height
-        self.buffer_size = width * height * 3
-        self.buffer = bytearray(self.buffer_size)
-        self.memory_map = None
-        self.file_handle = None
-        self.routing_table = {}
-        self._fast_dest = None  # numpy-optimized destination indices
-        self._fast_src = None   # numpy-optimized source indices (flattened)
-        self._buffer_view = None  # numpy view over self.buffer for vectorized writes
-        
-        # Load mapping and initialize
-        self.mapping = load_light_wall_mapping()
-        self._initialize_memory_map(mapping_file)
-        self._build_routing_table()
-    
-    def _initialize_memory_map(self, fpp_file):
-        """Initialize memory-mapped file for FPP output."""
-        try:
-            # Create or resize file if needed
-            if not os.path.exists(fpp_file) or os.path.getsize(fpp_file) != self.buffer_size:
-                with open(fpp_file, 'wb') as f:
-                    f.write(b'\x00' * self.buffer_size)
-            
-            self.file_handle = open(fpp_file, 'r+b')
-            self.memory_map = mmap.mmap(self.file_handle.fileno(), self.buffer_size)
-        except PermissionError:
-            print(f"FPP Error: Permission denied accessing {fpp_file}")
-            print(f"Fix: sudo chmod 666 {fpp_file}")
-            self._cleanup()
-        except Exception as e:
-            print(f"FPP Error: {e}")
-            self._cleanup()
-    
-    def _build_routing_table(self):
-        """Pre-compute routing from visual grid to FPP buffer positions."""
-        if not self.mapping:
-            return
-            
-        # Keep legacy dict for fallback path
-        dest_indices = []
-        src_indices = []
-        for visual_row in range(self.height):
-            for visual_col in range(self.width):
-                byte_indices = []
-                
-                # Each visual cell maps to 2 physical LED rows
-                for row_offset in range(2):
-                    physical_row = visual_row * 2 + row_offset
-                    physical_col = visual_col
-                    
-                    if (physical_row, physical_col) in self.mapping:
-                        pixel_idx = self.mapping[(physical_row, physical_col)]
-                        if 0 <= pixel_idx < 4500:
-                            byte_indices.append(pixel_idx * 3)
-                            dest_indices.append(pixel_idx)
-                            src_indices.append(visual_row * self.width + visual_col)
-                
-                if byte_indices:
-                    self.routing_table[(visual_row, visual_col)] = byte_indices
-
-        # Build fast numpy paths if numpy is available
-        if HAS_NUMPY and dest_indices:
-            self._fast_dest = np.array(dest_indices, dtype=np.int32)
-            self._fast_src = np.array(src_indices, dtype=np.int32)
-            # View over buffer as (pixels,3)
-            self._buffer_view = np.frombuffer(self.buffer, dtype=np.uint8).reshape(-1, 3)
-    
-    def write(self, dot_colors):
-        """Write color data to FPP buffer and flush to memory map.
-        
-        This is optimized for numpy array input (no tuple conversion needed).
-        For legacy tuple input, falls back to slower method.
-        """
-        if not self.memory_map:
-            return 0.0
-        
-        start = time.perf_counter()
-        
-        # Fast path: numpy arrays with precomputed indices (fully vectorized)
-        if isinstance(dot_colors, np.ndarray) and self._fast_dest is not None:
-            colors_flat = dot_colors.reshape(-1, 3)
-            # Vectorized scatter into buffer view
-            self._buffer_view[self._fast_dest] = colors_flat[self._fast_src]
-        elif isinstance(dot_colors, np.ndarray):
-            # Fallback numpy path using routing table
-            for (row, col), byte_indices in self.routing_table.items():
-                pixel = dot_colors[row, col]
-                r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
-                for byte_idx in byte_indices:
-                    self.buffer[byte_idx] = r
-                    self.buffer[byte_idx + 1] = g
-                    self.buffer[byte_idx + 2] = b
-        else:
-            # Slow path: legacy tuple format
-            for (row, col), byte_indices in self.routing_table.items():
-                r, g, b = dot_colors[row][col]
-                for byte_idx in byte_indices:
-                    self.buffer[byte_idx] = r
-                    self.buffer[byte_idx + 1] = g
-                    self.buffer[byte_idx + 2] = b
-        
-        # Single write operation
-        self.memory_map.seek(0)
-        self.memory_map.write(self.buffer)
-        
-        return (time.perf_counter() - start) * 1000
-    
-    def close(self):
-        """Clean up resources."""
-        self._cleanup()
-    
-    def _cleanup(self):
-        """Internal cleanup."""
-        if self.memory_map:
-            self.memory_map.close()
-            self.memory_map = None
-        if self.file_handle:
-            self.file_handle.close()
-            self.file_handle = None
+from .performance import PerformanceMonitor
+from .fpp_output import FPPOutput
 
 
 class DotMatrix:
@@ -354,6 +162,54 @@ class DotMatrix:
                 if remaining_ms > 0:
                     time.sleep(remaining_ms / 1000.0)
         
+        return total_time
+
+    def render_colors(self, dot_colors):
+        """Render precomputed color data (height x width x 3) directly.
+
+        dot_colors can be a numpy uint8 array or a nested list/tuple structure.
+        Performance stages are still recorded for visibility.
+        """
+        frame_start = time.perf_counter()
+
+        # No scaling for precomputed colors
+        self.monitor.record('scaling', 0.0)
+
+        # Accept numpy or list input and store in fastest form available
+        t_sample = time.perf_counter()
+        if HAS_NUMPY and isinstance(dot_colors, np.ndarray):
+            self.dot_colors = dot_colors
+        elif HAS_NUMPY:
+            self.dot_colors = np.array(dot_colors, dtype=np.uint8)
+        else:
+            self.dot_colors = dot_colors
+        self.monitor.record('sampling_blend', (time.perf_counter() - t_sample) * 1000)
+
+        # Visualize
+        t_vis = time.perf_counter()
+        self._visualize()
+        self.monitor.record('visualization', (time.perf_counter() - t_vis) * 1000)
+
+        # Write to FPP if enabled
+        if self.fpp:
+            fpp_time = self.fpp.write(self.dot_colors)
+            self.monitor.record('fpp_write', fpp_time)
+
+        # Complete frame
+        total_time = (time.perf_counter() - frame_start) * 1000
+        self.monitor.record('total', total_time)
+        self.monitor.frame_complete()
+
+        # Frame cap
+        if self.max_fps:
+            if self.clock:
+                self.clock.tick(self.max_fps)
+            else:
+                target_ms = 1000.0 / self.max_fps
+                remaining_ms = target_ms - total_time
+                if remaining_ms > 0:
+                    time.sleep(remaining_ms / 1000.0)
+
         return total_time
     
     def _scale_surface(self, source):
