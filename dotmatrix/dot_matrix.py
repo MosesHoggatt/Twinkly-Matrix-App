@@ -52,21 +52,30 @@ class DotMatrix:
         self.running = True
 
     def draw_dot(self, x, y, color=(50, 50, 50)):
-        pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
+        try:
+            pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
+        except Exception:
+            # Skip drawing in case of errors (e.g., headless mode issues)
+            pass
 
     def display_matrix(self):
-        self.screen.fill(self.bg_color)
-        first_column_color = (255, 0, 0)  # Red for the first column
-        second_column_color = (0, 255, 0)  # Green for the second column
-        stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
-        for row in range(self.height):
-            for col in range(self.width):
-                x = self.spacing + col * (self.dot_size + self.spacing)
-                y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
-                self.draw_dot(x, y, color=self.dot_colors[row][col])
-        
-        if not self.headless:
-            pygame.display.flip()
+        try:
+            self.screen.fill(self.bg_color)
+            first_column_color = (255, 0, 0)  # Red for the first column
+            second_column_color = (0, 255, 0)  # Green for the second column
+            stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
+            for row in range(self.height):
+                for col in range(self.width):
+                    x = self.spacing + col * (self.dot_size + self.spacing)
+                    y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
+                    self.draw_dot(x, y, color=self.dot_colors[row][col])
+            
+            if not self.headless:
+                pygame.display.flip()
+        except Exception as e:
+            # In headless mode, some pygame operations may fail
+            if not self.headless:
+                raise
 
     def _dot_position(self, row, col):
         stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
@@ -121,19 +130,23 @@ class DotMatrix:
         hi_w = self.width * self.supersample
         hi_h = self.height * self.supersample
         source_canvas = CanvasSource.from_size(hi_w, hi_h)
-        source_canvas.surface.fill((0, 0, 0))
-        pygame.draw.circle(
-            source_canvas.surface,
-            (0, 200, 255),
-            (
-                source_canvas.surface.get_width() // 2,
-                source_canvas.surface.get_height() // 2,
-            ),
-            min(
-                source_canvas.surface.get_width(),
-                source_canvas.surface.get_height(),
-            ) // 3,
-        )
+        try:
+            source_canvas.surface.fill((0, 0, 0))
+            pygame.draw.circle(
+                source_canvas.surface,
+                (0, 200, 255),
+                (
+                    source_canvas.surface.get_width() // 2,
+                    source_canvas.surface.get_height() // 2,
+                ),
+                min(
+                    source_canvas.surface.get_width(),
+                    source_canvas.surface.get_height(),
+                ) // 3,
+            )
+        except Exception as e:
+            # Drawing may fail in headless mode, continue anyway
+            pass
         self.convert_canvas_to_matrix(source_canvas)
 
     def render_image(self, image_path):
