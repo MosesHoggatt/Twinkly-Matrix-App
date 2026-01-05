@@ -2,7 +2,7 @@ import pygame
 
 try:
     from pygame._sdl2.video import Window as SDLWindow, Renderer as SDLRenderer, Texture as SDLTexture
-except ImportError:  # Optional dependency; preview window will be skipped if unavailable.
+except ImportError:
     SDLWindow = SDLRenderer = SDLTexture = None
 
 
@@ -28,7 +28,6 @@ class CanvasSource:
         try:
             image = image.convert_alpha()
         except pygame.error:
-            # Display format not available in headless mode
             pass
         if size:
             image = pygame.transform.smoothscale(image, size)
@@ -71,7 +70,6 @@ class SourcePreview:
             self.renderer.present()
             self.texture = texture
         except Exception:
-            # Disable preview on failure to avoid crashing the app.
             self.enabled = False
             self.window = None
             self.renderer = None

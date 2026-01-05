@@ -1,8 +1,5 @@
-import os
-import mmap
 import pygame
 import time
-
 from .source_canvas import CanvasSource, SourcePreview
 
 
@@ -25,67 +22,47 @@ class DotMatrix:
         self.spacing = spacing
         self.should_stagger = should_stagger
         self.blend_power = blend_power
-        self.show_source_preview = show_source_preview
         self.supersample = max(1, int(supersample))
         self.headless = headless
+        self.running = True
         
-        # Initialize pygame
         if not headless:
             pygame.init()
 
         self.bg_color = (0, 0, 0)
         self.off_color = (10, 10, 10)
-        self.on_color = (255, 255, 255)
         self.dot_colors = [[self.off_color for _ in range(width)] for _ in range(height)]
         
-        # Calculate window size based on matrix dimensions
         window_width = width * (dot_size + spacing) + spacing
         window_height = height * (dot_size + spacing) + spacing
         
-        # Create minimal surface in headless mode
         if headless:
-            self.screen = None  # No screen in headless mode
+            self.screen = None
         else:
             self.screen = pygame.display.set_mode((window_width, window_height))
             pygame.display.set_caption("Dot Matrix Display")
 
-        self.preview = SourcePreview(self.width, self.height, enabled=self.show_source_preview)
-        
-        if not headless:
-            self.clock = pygame.time.Clock()
-        else:
-            self.clock = None
-        self.running = True
+        self.preview = SourcePreview(self.width, self.height, enabled=show_source_preview)
+        self.clock = pygame.time.Clock() if not headless else None
 
-    def draw_dot(self, x, y, color=(50, 50, 50)):
-        if not self.headless and self.screen:
-            try:
-                pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
-            except Exception:
-                # Skip drawing in case of errors
-                pass
+    def draw_dot(self, x, y, color):
+        if self.screen:
+            pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
 
-    def display_matrix(self):
+    def visualize_matrix(self):
         if self.headless:
-            # In headless mode, just update the color array, no rendering
             return
             
-        try:
-            self.screen.fill(self.bg_color)
-            first_column_color = (255, 0, 0)  # Red for the first column
-            second_column_color = (0, 255, 0)  # Green for the second column
-            stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
-            for row in range(self.height):
-                for col in range(self.width):
-                    x = self.spacing + col * (self.dot_size + self.spacing)
-                    y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
-                    self.draw_dot(x, y, color=self.dot_colors[row][col])
-            
-            pygame.display.flip()
-        except Exception as e:
-            # In headless mode, some pygame operations may fail
-            if not self.headless:
-                raise
+        self.screen.fill(self.bg_color)
+        stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
+        
+        for row in range(self.height):
+            for col in range(self.width):
+                x = self.spacing + col * (self.dot_size + self.spacing)
+                y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
+                self.draw_dot(x, y, self.dot_colors[row][col])
+        
+        pygame.display.flip()
 
     def _dot_position(self, row, col):
         stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
@@ -93,8 +70,7 @@ class DotMatrix:
         y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
         return x, y
 
-    def convert_canvas_to_matrix(self, canvas): # Used for rendering live windows
-        # Accepts either a CanvasSource or a raw Pygame surface.
+    def convert_canvas_to_matrix(self, canvas):
         source_surface = canvas.surface if isinstance(canvas, CanvasSource) else canvas
         if self.preview:
             self.preview.update(source_surface)
@@ -106,70 +82,51 @@ class DotMatrix:
         if working_surface.get_size() != target_up:
             working_surface = pygame.transform.smoothscale(working_surface, target_up)
 
-        # Downscale to matrix resolution to introduce spatial blending/AA.
         scaled_surface = pygame.transform.smoothscale(working_surface, (base_w, base_h))
-        canvas_width, canvas_height = scaled_surface.get_size()
         
         samples = []
         max_luminance = 0.0
         for row in range(self.height):
             for col in range(self.width):
-                x = col
-                y = row
-                color = scaled_surface.get_at((x, y))[:3]
+                color = scaled_surface.get_at((col, row))[:3]
                 luminance = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
-                samples.append((row, col, x, y, color, luminance))
+                samples.append((row, col, color, luminance))
                 if luminance > max_luminance:
                     max_luminance = luminance
 
         norm = max(1.0, max_luminance)
-
         exp = max(0.001, self.blend_power)
-        for row, col, x, y, color, luminance in samples:
-            t = max(0.0, min(1.0, luminance / norm))
-            t = t ** exp
+        
+        for row, col, color, luminance in samples:
+            t = max(0.0, min(1.0, luminance / norm)) ** exp
             blended = tuple(
                 int(self.off_color[i] * (1.0 - t) + color[i] * t)
                 for i in range(3)
             )
             self.dot_colors[row][col] = blended
 
-        self.display_matrix()
+        self.visualize_matrix()
 
     def render_sample_pattern(self):
         if self.headless:
-            # In headless mode, just set some test colors
-            print("Headless mode: Setting test pattern in dot_colors array")
             for row in range(self.height):
                 for col in range(self.width):
-                    # Simple pattern for testing
                     if (row + col) % 2 == 0:
                         self.dot_colors[row][col] = (100, 100, 255)
                     else:
                         self.dot_colors[row][col] = self.off_color
-            print(f"Pattern set for {self.width}x{self.height} matrix")
             return
             
         hi_w = self.width * self.supersample
         hi_h = self.height * self.supersample
         source_canvas = CanvasSource.from_size(hi_w, hi_h)
-        try:
-            source_canvas.surface.fill((0, 0, 0))
-            pygame.draw.circle(
-                source_canvas.surface,
-                (0, 200, 255),
-                (
-                    source_canvas.surface.get_width() // 2,
-                    source_canvas.surface.get_height() // 2,
-                ),
-                min(
-                    source_canvas.surface.get_width(),
-                    source_canvas.surface.get_height(),
-                ) // 3,
-            )
-        except Exception as e:
-            # Drawing may fail in headless mode, continue anyway
-            pass
+        source_canvas.surface.fill((0, 0, 0))
+        pygame.draw.circle(
+            source_canvas.surface,
+            (0, 200, 255),
+            (hi_w // 2, hi_h // 2),
+            min(hi_w, hi_h) // 3,
+        )
         self.convert_canvas_to_matrix(source_canvas)
 
     def render_image(self, image_path):
@@ -178,15 +135,11 @@ class DotMatrix:
 
     def wait_for_exit(self):
         if self.headless:
-            # In headless mode, just sleep for a bit then exit
-            print("Headless mode: Waiting 5 seconds before exit...")
             try:
                 time.sleep(5)
             except KeyboardInterrupt:
-                print("\nInterrupted by user")
-            print("Exiting headless mode")
+                pass
         else:
-            # Normal interactive mode with event loop
             try:
                 while self.running:
                     for event in pygame.event.get():
@@ -196,7 +149,7 @@ class DotMatrix:
                             self.handle_click(event.pos)
                     
                     if self.clock:
-                        self.clock.tick(40)  # 40 FPS
+                        self.clock.tick(40)
             except KeyboardInterrupt:
                 pass
             finally:
