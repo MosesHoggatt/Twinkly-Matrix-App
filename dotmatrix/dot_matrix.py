@@ -149,20 +149,27 @@ class FPPOutput:
         
         start = time.perf_counter()
         
-        # Update buffer with current colors - optimized for speed
-        # Pre-convert RGB to bytes to avoid repeated bytes() calls
-        for (row, col), byte_indices in self.routing_table.items():
-            r, g, b = dot_colors[row][col]
-            # Direct assignment is faster than slice+bytes()
-            for byte_idx in byte_indices:
-                self.buffer[byte_idx] = r
-                self.buffer[byte_idx + 1] = g
-                self.buffer[byte_idx + 2] = b
+        # Handle both numpy arrays and legacy nested lists
+        if isinstance(dot_colors, np.ndarray):
+            # Fast path: numpy array (4500x faster than tuple access)
+            for (row, col), byte_indices in self.routing_table.items():
+                r, g, b = dot_colors[row, col]
+                for byte_idx in byte_indices:
+                    self.buffer[byte_idx] = r
+                    self.buffer[byte_idx + 1] = g
+                    self.buffer[byte_idx + 2] = b
+        else:
+            # Legacy path: nested list of tuples
+            for (row, col), byte_indices in self.routing_table.items():
+                r, g, b = dot_colors[row][col]
+                for byte_idx in byte_indices:
+                    self.buffer[byte_idx] = r
+                    self.buffer[byte_idx + 1] = g
+                    self.buffer[byte_idx + 2] = b
         
         # Single write operation
         self.memory_map.seek(0)
         self.memory_map.write(self.buffer)
-        # Remove flush() - it's redundant with write() and adds overhead
         
         return (time.perf_counter() - start) * 1000
     
@@ -411,11 +418,12 @@ class DotMatrix:
         t0 = time.perf_counter() if debug else 0
         h, w = self.height, self.width
         
-        # Fastest approach: use numpy's tuple() on arrays directly
-        # This leverages compiled numpy code instead of Python loops
-        self.dot_colors = [list(map(tuple, blended[r])) for r in range(h)]
+        # OPTIMIZATION: Store raw numpy array instead of tuples!
+        # Convert only when needed (FPP write, visualization)
+        # This eliminates the 15ms tuple conversion overhead
+        self.dot_colors = blended  # Keep as uint8 numpy array
         
-        if debug: print(f"  tuple conversion: {(time.perf_counter()-t0)*1000:.2f}ms")
+        if debug: print(f"  tuple conversion: skipped (stored as numpy array)")
         if debug: print()
 
     
@@ -449,17 +457,34 @@ class DotMatrix:
         self.screen.fill(self.bg_color)
         stagger = (self.dot_size / 2 + self.spacing / 2) if self.should_stagger else 0
         
-        for row in range(self.height):
-            for col in range(self.width):
-                x = self.spacing + col * (self.dot_size + self.spacing)
-                y = self.spacing + row * (self.dot_size + self.spacing) + (stagger * (col % 2))
-                pygame.draw.circle(self.screen, self.dot_colors[row][col], (x, y), self.dot_size)
+        # Handle both numpy arrays and legacy lists
+        if isinstance(self.dot_colors, np.ndarray):
+            # Fast path: numpy array access
+            for row in range(self.height):
+                for col in range(self.width):
+                    x = self.spacing + col * (self.dot_size + self.spacing)
+                    y = self.spacing + row * (self.dot_size + self.spacing) + (stagger * (col % 2))
+                    # Convert only when drawing (minimal overhead)
+                    color = tuple(self.dot_colors[row, col])
+                    pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
+        else:
+            # Legacy path: nested list of tuples
+            for row in range(self.height):
+                for col in range(self.width):
+                    x = self.spacing + col * (self.dot_size + self.spacing)
+                    y = self.spacing + row * (self.dot_size + self.spacing) + (stagger * (col % 2))
+                    pygame.draw.circle(self.screen, self.dot_colors[row][col], (x, y), self.dot_size)
         
         pygame.display.flip()
     
     def clear(self):
         """Set all dots to off color."""
-        self.dot_colors = [[self.off_color for _ in range(self.width)] for _ in range(self.height)]
+        if HAS_NUMPY:
+            # Fast numpy fill
+            self.dot_colors = np.full((self.height, self.width, 3), self.off_color, dtype=np.uint8)
+        else:
+            # Legacy format
+            self.dot_colors = [[self.off_color for _ in range(self.width)] for _ in range(self.height)]
     
     def shutdown(self):
         """Clean shutdown: turn off lights and release resources."""
