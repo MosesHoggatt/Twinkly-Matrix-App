@@ -24,14 +24,14 @@ class CanvasSource:
 
     @classmethod
     def from_image(cls, image_path, size=None):
-        image = pygame.image.load(image_path)
+        loaded_image = pygame.image.load(image_path)
         try:
-            image = image.convert_alpha()
+            loaded_image = loaded_image.convert_alpha()
         except pygame.error:
             pass
         if size:
-            image = pygame.transform.smoothscale(image, size)
-        return cls(image)
+            loaded_image = pygame.transform.smoothscale(loaded_image, size)
+        return cls(loaded_image)
 
     def update_from_window(self, window_surface=None):
         surface = window_surface or pygame.display.get_surface()
@@ -59,16 +59,16 @@ class SourcePreview:
         if not (self.enabled and self.renderer and SDLTexture):
             return
         try:
-            texture = SDLTexture.from_surface(self.renderer, surface)
+            rendered_texture = SDLTexture.from_surface(self.renderer, surface)
             self.renderer.clear()
             if hasattr(self.renderer, "copy"):
-                self.renderer.copy(texture, None, None)
-            elif hasattr(texture, "draw"):
-                texture.draw(None)
+                self.renderer.copy(rendered_texture, None, None)
+            elif hasattr(rendered_texture, "draw"):
+                rendered_texture.draw(None)
             else:
                 return
             self.renderer.present()
-            self.texture = texture
+            self.texture = rendered_texture
         except Exception:
             self.enabled = False
             self.window = None
