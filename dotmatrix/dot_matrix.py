@@ -54,6 +54,19 @@ class DotMatrix:
 
         self.preview = SourcePreview(self.width, self.height, enabled=show_source_preview)
         self.clock = pygame.time.Clock() if not headless else None
+        
+        self.frame_count = 0
+        self.last_log_time = time.time()
+        self.stage_timings = {
+            'scaling': [],
+            'luminance_sampling': [],
+            'blending': [],
+            'grid_scaling': [],
+            'buffer_creation': [],
+            'fpp_write': [],
+            'visualization': [],
+            'total': []
+        }
 
     def _initialize_fpp(self, fpp_file):
         fpp_buffer_size = self.width * self.height * 3  # 87 * 50 * 3 = 13,050 bytes
@@ -91,12 +104,23 @@ class DotMatrix:
         if not self.fpp_memory_map or not self.fpp_mapping:
             return
         
+        grid_scale_start = time.perf_counter()
         scaled_grid = self._scale_grid_for_mapping(self.dot_colors)
-        buffer = create_fpp_buffer_from_grid(scaled_grid, self.fpp_mapping)
+        grid_scale_time = (time.perf_counter() - grid_scale_start) * 1000
         
+        buffer_start = time.perf_counter()
+        buffer = create_fpp_buffer_from_grid(scaled_grid, self.fpp_mapping)
+        buffer_time = (time.perf_counter() - buffer_start) * 1000
+        
+        write_start = time.perf_counter()
         self.fpp_memory_map.seek(0)
         self.fpp_memory_map.write(buffer)
         self.fpp_memory_map.flush()
+        write_time = (time.perf_counter() - write_start) * 1000
+        
+        self.stage_timings['grid_scaling'].append(grid_scale_time)
+        self.stage_timings['buffer_creation'].append(buffer_time)
+        self.stage_timings['fpp_write'].append(write_time)
 
     def _scale_grid_for_mapping(self, grid):
         source_height = len(grid)
@@ -114,6 +138,39 @@ class DotMatrix:
                     scaled[target_row_2][source_col] = color
         return scaled
 
+    def _log_performance_if_needed(self):
+        current_time = time.time()
+        elapsed = current_time - self.last_log_time
+        
+        if elapsed >= 1.0:
+            if self.frame_count > 0:
+                fps = self.frame_count / elapsed
+                
+                print(f"\n{'='*60}")
+                print(f"Performance Report (Last {elapsed:.2f}s)")
+                print(f"{'='*60}")
+                print(f"Average FPS: {fps:.2f}")
+                print(f"Frame Count: {self.frame_count}")
+                print(f"\nStage Latencies (average):")
+                
+                for stage, times in self.stage_timings.items():
+                    if times:
+                        avg_time = sum(times) / len(times)
+                        min_time = min(times)
+                        max_time = max(times)
+                        print(f"  {stage:20s}: {avg_time:6.2f}ms (min: {min_time:5.2f}ms, max: {max_time:5.2f}ms)")
+                
+                if self.stage_timings['total']:
+                    avg_total = sum(self.stage_timings['total']) / len(self.stage_timings['total'])
+                    print(f"\nFrame budget: 25.00ms (for 40 FPS)")
+                    print(f"Headroom: {25.0 - avg_total:6.2f}ms")
+                print(f"{'='*60}\n")
+            
+            self.frame_count = 0
+            self.last_log_time = current_time
+            for stage in self.stage_timings:
+                self.stage_timings[stage].clear()
+    
     def draw_dot(self, dot_x, dot_y, color):
         if self.screen:
             pygame.draw.circle(self.screen, color, (dot_x, dot_y), self.dot_size)
@@ -134,17 +191,22 @@ class DotMatrix:
         pygame.display.flip()
 
     def convert_canvas_to_matrix(self, canvas): # Could be called every frame for moving canvases
+        frame_start = time.perf_counter()
+        
         source_surface = canvas.surface if isinstance(canvas, CanvasSource) else canvas
         if self.preview:
             self.preview.update(source_surface)
 
+        scaling_start = time.perf_counter()
         target_upsampled_size = (self.width * self.supersample, self.height * self.supersample)
         working_surface = source_surface
         if working_surface.get_size() != target_upsampled_size:
             working_surface = pygame.transform.smoothscale(working_surface, target_upsampled_size)
 
         scaled_surface = pygame.transform.smoothscale(working_surface, (self.width, self.height))
+        scaling_time = (time.perf_counter() - scaling_start) * 1000
         
+        luminance_start = time.perf_counter()
         samples = []
         max_luminance = 0.0
         for row in range(self.height):
@@ -154,7 +216,9 @@ class DotMatrix:
                 samples.append((row, col, color, luminance))
                 if luminance > max_luminance:
                     max_luminance = luminance
+        luminance_time = (time.perf_counter() - luminance_start) * 1000
 
+        blending_start = time.perf_counter()
         max_normalized_luminance = max(1.0, max_luminance)
         blend_exponent = max(0.001, self.blend_power)
         
@@ -165,9 +229,26 @@ class DotMatrix:
                 for channel_index in range(3)
             )
             self.dot_colors[row][col] = blended
+        blending_time = (time.perf_counter() - blending_start) * 1000
 
+        viz_start = time.perf_counter()
         self.visualize_matrix()
+        viz_time = (time.perf_counter() - viz_start) * 1000
+        
+        fpp_start = time.perf_counter()
         self.draw_on_twinklys()
+        fpp_time = (time.perf_counter() - fpp_start) * 1000
+        
+        total_time = (time.perf_counter() - frame_start) * 1000
+        
+        self.stage_timings['scaling'].append(scaling_time)
+        self.stage_timings['luminance_sampling'].append(luminance_time)
+        self.stage_timings['blending'].append(blending_time)
+        self.stage_timings['visualization'].append(viz_time)
+        self.stage_timings['total'].append(total_time)
+        
+        self.frame_count += 1
+        self._log_performance_if_needed()
 
     def render_sample_pattern(self):
         if self.headless:
