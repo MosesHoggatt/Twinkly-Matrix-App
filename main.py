@@ -15,7 +15,7 @@ def main():
         headless=HEADLESS,
         fpp_output=True
     )
-    matrix.render_sample_pattern()
+    matrix.animated_bouncing_ball()
     matrix.wait_for_exit()
 
 

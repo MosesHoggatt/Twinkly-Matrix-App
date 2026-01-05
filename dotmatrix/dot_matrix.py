@@ -5,7 +5,6 @@ import os
 from .source_canvas import CanvasSource, SourcePreview
 from .light_wall_mapping import load_light_wall_mapping, create_fpp_buffer_from_grid
 
-
 class DotMatrix:
     def __init__(
         self,
@@ -227,9 +226,60 @@ class DotMatrix:
                 blue_avg = int(blue_sum / pixel_count)
                 self.dot_colors[row][col] = (red_avg, green_avg, blue_avg)
 
-    def render_image(self, image_path):
-        source_canvas = CanvasSource.from_image(image_path, size=(self.width, self.height))
-        self.convert_canvas_to_matrix(source_canvas)
+    def animated_bouncing_ball(self):
+        matrix = DotMatrix(
+            headless=False,
+            fpp_output=True,
+            show_source_preview=True
+        )
+        
+        # Create high-res canvas
+        high_res_width = matrix.width * matrix.supersample
+        high_res_height = matrix.height * matrix.supersample
+        source_canvas = CanvasSource.from_size(high_res_width, high_res_height)
+        
+        # Animation state
+        ball_x = high_res_width // 2
+        ball_y = high_res_height // 2
+        velocity_x = 3
+        velocity_y = 2
+        radius = 20
+        
+        # Animation loop
+        running = True
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            
+            # Update physics
+            ball_x += velocity_x
+            ball_y += velocity_y
+            
+            # Bounce off walls
+            if ball_x - radius < 0 or ball_x + radius > high_res_width:
+                velocity_x *= -1
+            if ball_y - radius < 0 or ball_y + radius > high_res_height:
+                velocity_y *= -1
+            
+            # Clear and redraw
+            source_canvas.surface.fill((0, 0, 0))
+            pygame.draw.circle(
+                source_canvas.surface,
+                (0, 200, 255),
+                (int(ball_x), int(ball_y)),
+                radius
+            )
+            
+            # Convert to matrix and send to LEDs
+            matrix.convert_canvas_to_matrix(source_canvas)
+            
+            # Control frame rate
+            matrix.clock.tick(40)
+        
+        matrix._turn_off_all_lights()
+        pygame.quit()
 
     def wait_for_exit(self):
         if self.headless:
