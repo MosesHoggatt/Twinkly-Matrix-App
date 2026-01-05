@@ -194,7 +194,8 @@ class DotMatrix:
     def wait_for_exit(self):
         if self.headless:
             try:
-                time.sleep(5)
+                while True:
+                    time.sleep(1)
             except KeyboardInterrupt:
                 pass
         else:

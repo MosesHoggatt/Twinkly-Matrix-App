@@ -12,8 +12,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 def main():
     print("Initializing Twinkly Matrix Display...")
     
-    if not HEADLESS:
-        setup_fpp_overlay()
+    setup_fpp_overlay()
     
     matrix = DotMatrix(
         show_source_preview=(not HEADLESS),
