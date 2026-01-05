@@ -3,7 +3,7 @@ import time
 from dotmatrix import FPPOutput
 
 def main():
-    fpp = FPPOutput(width=87, height=50)
+    fpp = FPPOutput(width=90, height=50)
     
     print("Starting FPP color wash test...")
     print("Verifying FPP shared memory write access...")

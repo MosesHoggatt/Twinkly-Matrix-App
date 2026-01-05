@@ -8,7 +8,7 @@ from .source_canvas import CanvasSource, SourcePreview
 class DotMatrix:
     def __init__(
         self,
-        width=87,
+        width=90,
         height=50,
         dot_size=6,
         spacing=15,

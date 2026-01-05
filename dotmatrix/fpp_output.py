@@ -4,7 +4,7 @@ import os
 
 
 class FPPOutput:
-    def __init__(self, width=87, height=50, fpp_file="/dev/shm/FPP-Model-Data-Light_Wall"):
+    def __init__(self, width=90, height=50, fpp_file="/dev/shm/FPP-Model-Data-Light_Wall"):
         self.width = width
         self.height = height
         self.fpp_file = fpp_file
