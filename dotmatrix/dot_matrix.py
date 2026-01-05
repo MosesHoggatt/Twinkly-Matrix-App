@@ -195,8 +195,8 @@ class DotMatrix:
         supersample=3,
         headless=False,
         show_source_preview=False,
-        enable_fpp=False,
-        fpp_device="/dev/shm/FPP-Model-Data-Light_Wall",
+        fpp_output=False,
+        fpp_memory_buffer_file="/dev/shm/FPP-Model-Data-Light_Wall",
         enable_performance_monitor=True
     ):
         """
@@ -211,8 +211,8 @@ class DotMatrix:
             supersample: Antialiasing factor for source scaling
             headless: Skip pygame window creation
             show_source_preview: Show separate preview window of source
-            enable_fpp: Enable FPP memory-mapped output
-            fpp_device: Path to FPP memory buffer
+            fpp_output: Enable FPP memory-mapped output
+            fpp_memory_buffer_file: Path to FPP memory buffer
             enable_performance_monitor: Track and log performance
         """
         self.width = width
@@ -233,7 +233,7 @@ class DotMatrix:
         
         # Optional components
         self.monitor = PerformanceMonitor(enabled=enable_performance_monitor)
-        self.fpp = FPPOutput(width, height, fpp_device) if enable_fpp else None
+        self.fpp = FPPOutput(width, height, fpp_memory_buffer_file) if fpp_output else None
         self.preview = SourcePreview(width, height, enabled=show_source_preview)
         
         # Pygame setup
