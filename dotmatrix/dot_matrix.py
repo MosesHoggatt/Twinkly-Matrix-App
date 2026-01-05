@@ -37,7 +37,8 @@ class DotMatrix:
         if fpp_output:
             self._initialize_fpp(fpp_memory_buffer_file)
         
-        pygame.init()  # Initialize pygame for surface/drawing operations
+        if not headless:
+            pygame.init()
 
         self.bg_color = (0, 0, 0)
         self.off_color = (10, 10, 10)
@@ -162,18 +163,48 @@ class DotMatrix:
         self.draw_on_twinklys()
 
     def render_sample_pattern(self):
-        # Draw a cyan circle - works in both headless and GUI modes
-        hi_w = self.width * self.supersample
-        hi_h = self.height * self.supersample
-        source_canvas = CanvasSource.from_size(hi_w, hi_h)
-        source_canvas.surface.fill((0, 0, 0))
-        pygame.draw.circle(
-            source_canvas.surface,
-            (0, 200, 255),  # Cyan
-            (hi_w // 2, hi_h // 2),
-            min(hi_w, hi_h) // 3,
-        )
-        self.convert_canvas_to_matrix(source_canvas)
+        if self.headless:
+            # In headless FPP mode, render circle directly to dot_colors without pygame
+            self._render_circle_pattern()
+            self.draw_on_twinklys()
+        else:
+            # On desktop with display, use pygame for rendering
+            pygame.init()
+            hi_w = self.width * self.supersample
+            hi_h = self.height * self.supersample
+            source_canvas = CanvasSource.from_size(hi_w, hi_h)
+            source_canvas.surface.fill((0, 0, 0))
+            pygame.draw.circle(
+                source_canvas.surface,
+                (0, 200, 255),  # Cyan
+                (hi_w // 2, hi_h // 2),
+                min(hi_w, hi_h) // 3,
+            )
+            self.convert_canvas_to_matrix(source_canvas)
+    
+    def _render_circle_pattern(self):
+        """Render a cyan circle directly without pygame surfaces (safe for headless FPP)"""
+        # Center and radius
+        center_x = self.width / 2
+        center_y = self.height / 2
+        radius = min(self.width, self.height) / 3
+        
+        cyan = (0, 200, 255)
+        off = self.off_color
+        
+        # Draw circle using distance calculation
+        for row in range(self.height):
+            for col in range(self.width):
+                dx = col - center_x
+                dy = row - center_y
+                dist = (dx * dx + dy * dy) ** 0.5
+                
+                if dist <= radius:
+                    # Inside circle - use cyan
+                    self.dot_colors[row][col] = cyan
+                else:
+                    # Outside circle - use off color
+                    self.dot_colors[row][col] = off
 
     def render_image(self, image_path):
         source_canvas = CanvasSource.from_image(image_path, size=(self.width, self.height))
