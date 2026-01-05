@@ -1,5 +1,5 @@
 import os
-from dotmatrix import DotMatrix, setup_fpp_overlay
+from dotmatrix import DotMatrix
 
 HEADLESS = 'DISPLAY' not in os.environ
 
@@ -11,8 +11,6 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 def main():
     print("Initializing Twinkly Matrix Display...")
-    
-    setup_fpp_overlay()
     
     matrix = DotMatrix(
         show_source_preview=(not HEADLESS),
