@@ -6,12 +6,10 @@ HEADLESS = 'DISPLAY' not in os.environ
 if HEADLESS:
     os.environ['SDL_VIDEODRIVER'] = 'dummy'
     os.environ['SDL_AUDIODRIVER'] = 'dummy'
-
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
+
 def main():
-    print("Initializing Twinkly Matrix Display...")
-    
     matrix = DotMatrix(
         show_source_preview=(not HEADLESS),
         headless=HEADLESS,
@@ -19,6 +17,7 @@ def main():
     )
     matrix.render_sample_pattern()
     matrix.wait_for_exit()
+
 
 if __name__ == "__main__":
     main()

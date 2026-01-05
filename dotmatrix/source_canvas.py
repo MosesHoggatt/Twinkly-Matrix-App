@@ -73,4 +73,3 @@ class SourcePreview:
             self.enabled = False
             self.window = None
             self.renderer = None
-            self.texture = None

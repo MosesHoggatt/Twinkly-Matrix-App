@@ -54,44 +54,25 @@ class FPPOutput:
         self.mm.flush()
     
     def verify_write(self):
-        """Verify data is being written to shared memory"""
         if not self.mm:
-            print("FPP output not initialized")
             return False
         
         test_buffer = bytearray(self.buffer_size)
-        test_buffer[0:3] = b'\xFF\x00\x00'  # Red for first pixel
+        test_buffer[0:3] = b'\xFF\x00\x00'
         
         self.mm.seek(0)
         self.mm.write(test_buffer)
         self.mm.flush()
         
         self.mm.seek(0)
-        read_back = self.mm.read(3)
-        
-        if read_back == b'\xFF\x00\x00':
-            print("✓ FPP shared memory is writable and readable")
-            return True
-        else:
-            print("✗ FPP shared memory write verification failed")
-            print(f"  Expected: b'\\xFF\\x00\\x00', got: {read_back}")
-            return False
+        return self.mm.read(3) == b'\xFF\x00\x00'
 
     
     def test_color_wash(self, fps=40):
         if not self.mm:
-            print("FPP output not initialized")
             return
         
-        colors = [
-            (255, 0, 0),    # Red
-            (0, 255, 0),    # Green
-            (0, 0, 255),    # Blue
-            (255, 255, 0),  # Yellow
-            (255, 0, 255),  # Magenta
-            (0, 255, 255),  # Cyan
-        ]
-        
+        colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
         frame_delay = 1.0 / fps
         color_idx = 0
         
@@ -99,15 +80,12 @@ class FPPOutput:
             while True:
                 color = colors[color_idx % len(colors)]
                 buffer = bytearray(color * (self.width * self.height))
-                
                 self.mm.seek(0)
                 self.mm.write(buffer)
                 self.mm.flush()
-                
                 color_idx += 1
                 time.sleep(frame_delay)
         except KeyboardInterrupt:
-            print("\nStopping color wash")
             self.clear()
     
     def clear(self):

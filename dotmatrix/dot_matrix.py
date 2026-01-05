@@ -93,7 +93,6 @@ class DotMatrix:
         if not self.fpp_mm or not self.fpp_mapping:
             return
         
-        # Scale 90x50 visual grid to 100x90 mapping grid (CSV layout)
         scaled_grid = self._scale_grid_for_mapping(self.dot_colors)
         buffer = create_fpp_buffer_from_grid(scaled_grid, self.fpp_mapping)
         
@@ -102,7 +101,6 @@ class DotMatrix:
         self.fpp_mm.flush()
 
     def _scale_grid_for_mapping(self, grid):
-        """Scale the visual 90x50 grid to the 100x90 CSV grid (2x height)."""
         src_h = len(grid)
         src_w = len(grid[0]) if src_h else 0
         tgt_h = 100
@@ -122,7 +120,7 @@ class DotMatrix:
         if self.screen:
             pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
 
-    def visualize_matrix(self): # Only in non-headless mode
+    def visualize_matrix(self):
         if self.headless:
             return
             
@@ -137,25 +135,17 @@ class DotMatrix:
         
         pygame.display.flip()
 
-    def _dot_position(self, row, col):
-        stagger_offset = (self.dot_size / 2) + self.spacing / 2 if self.should_stagger else 0
-        x = self.spacing + col * (self.dot_size + self.spacing)
-        y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
-        return x, y
-
-    def convert_canvas_to_matrix(self, canvas): # TODO - Move to source_canvas
+    def convert_canvas_to_matrix(self, canvas):
         source_surface = canvas.surface if isinstance(canvas, CanvasSource) else canvas
         if self.preview:
             self.preview.update(source_surface)
 
-        base_w, base_h = self.width, self.height
-        target_up = (base_w * self.supersample, base_h * self.supersample)
-
+        target_up = (self.width * self.supersample, self.height * self.supersample)
         working_surface = source_surface
         if working_surface.get_size() != target_up:
             working_surface = pygame.transform.smoothscale(working_surface, target_up)
 
-        scaled_surface = pygame.transform.smoothscale(working_surface, (base_w, base_h))
+        scaled_surface = pygame.transform.smoothscale(working_surface, (self.width, self.height))
         
         samples = []
         max_luminance = 0.0
@@ -183,11 +173,9 @@ class DotMatrix:
 
     def render_sample_pattern(self):
         if self.headless:
-            # In headless FPP mode, render circle directly to dot_colors without pygame
             self._render_circle_pattern()
             self.draw_on_twinklys()
         else:
-            # On desktop with display, use pygame for rendering
             pygame.init()
             hi_w = self.width * self.supersample
             hi_h = self.height * self.supersample
@@ -195,19 +183,16 @@ class DotMatrix:
             source_canvas.surface.fill((0, 0, 0))
             pygame.draw.circle(
                 source_canvas.surface,
-                (0, 200, 255),  # Cyan
+                (0, 200, 255),
                 (hi_w // 2, hi_h // 2),
                 min(hi_w, hi_h) // 3,
             )
             self.convert_canvas_to_matrix(source_canvas)
     
     def _render_circle_pattern(self):
-        """Render a cyan circle directly without pygame surfaces (safe for headless FPP)"""
-        # Use supersampled dimensions for better circle quality
         ss_width = self.width * self.supersample
         ss_height = self.height * self.supersample
         
-        # Center and radius in supersampled space
         center_x = ss_width / 2
         center_y = ss_height / 2
         radius = min(ss_width, ss_height) / 3
@@ -215,10 +200,8 @@ class DotMatrix:
         cyan = (0, 200, 255)
         off = self.off_color
         
-        # Create supersampled grid and downsample
         ss_grid = [[off for _ in range(ss_width)] for _ in range(ss_height)]
         
-        # Draw circle in supersampled space
         for ss_row in range(ss_height):
             for ss_col in range(ss_width):
                 dx = ss_col - center_x
@@ -228,10 +211,8 @@ class DotMatrix:
                 if dist <= radius:
                     ss_grid[ss_row][ss_col] = cyan
         
-        # Downsample back to grid resolution
         for row in range(self.height):
             for col in range(self.width):
-                # Average the supersampled pixels
                 r_sum = g_sum = b_sum = 0
                 count = 0
                 for ss_row in range(row * self.supersample, (row + 1) * self.supersample):
@@ -266,8 +247,6 @@ class DotMatrix:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             self.running = False
-                        if event.type == pygame.MOUSEBUTTONDOWN:
-                            self.handle_click(event.pos)
                     
                     if self.clock:
                         self.clock.tick(40)
@@ -278,15 +257,12 @@ class DotMatrix:
                 pygame.quit()
     
     def _turn_off_all_lights(self):
-        """Turn off all LEDs by setting them to black and writing to FPP"""
         for row in range(self.height):
             for col in range(self.width):
                 self.dot_colors[row][col] = (0, 0, 0)
         
         if self.fpp_mm:
             self.draw_on_twinklys()
-        
-        if self.fpp_mm:
             self.fpp_mm.close()
         if self.fpp_memory_buffer_file:
             self.fpp_memory_buffer_file.close()
