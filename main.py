@@ -5,8 +5,9 @@ import time
 # On systems with X11/Wayland, DISPLAY environment variable indicates display availability
 HEADLESS = 'DISPLAY' not in os.environ
 if HEADLESS:
-    # No display detected, run in headless mode with framebuffer
+    # No display detected, disable video entirely
     os.environ['SDL_VIDEODRIVER'] = 'dummy'
+    os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
 # Suppress pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'

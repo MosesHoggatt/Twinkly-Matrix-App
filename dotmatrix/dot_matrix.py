@@ -28,7 +28,10 @@ class DotMatrix:
         self.show_source_preview = show_source_preview
         self.supersample = max(1, int(supersample))
         self.headless = headless
-        pygame.init()
+        
+        # Initialize pygame
+        if not headless:
+            pygame.init()
 
         self.bg_color = (0, 0, 0)
         self.off_color = (10, 10, 10)
@@ -41,24 +44,32 @@ class DotMatrix:
         
         # Create minimal surface in headless mode
         if headless:
-            self.screen = pygame.Surface((window_width, window_height))
+            self.screen = None  # No screen in headless mode
         else:
             self.screen = pygame.display.set_mode((window_width, window_height))
             pygame.display.set_caption("Dot Matrix Display")
 
         self.preview = SourcePreview(self.width, self.height, enabled=self.show_source_preview)
         
-        self.clock = pygame.time.Clock()
+        if not headless:
+            self.clock = pygame.time.Clock()
+        else:
+            self.clock = None
         self.running = True
 
     def draw_dot(self, x, y, color=(50, 50, 50)):
-        try:
-            pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
-        except Exception:
-            # Skip drawing in case of errors (e.g., headless mode issues)
-            pass
+        if not self.headless and self.screen:
+            try:
+                pygame.draw.circle(self.screen, color, (x, y), self.dot_size)
+            except Exception:
+                # Skip drawing in case of errors
+                pass
 
     def display_matrix(self):
+        if self.headless:
+            # In headless mode, just update the color array, no rendering
+            return
+            
         try:
             self.screen.fill(self.bg_color)
             first_column_color = (255, 0, 0)  # Red for the first column
@@ -70,8 +81,7 @@ class DotMatrix:
                     y = self.spacing + row * (self.dot_size + self.spacing) + (stagger_offset * (col % 2))
                     self.draw_dot(x, y, color=self.dot_colors[row][col])
             
-            if not self.headless:
-                pygame.display.flip()
+            pygame.display.flip()
         except Exception as e:
             # In headless mode, some pygame operations may fail
             if not self.headless:
@@ -127,6 +137,19 @@ class DotMatrix:
         self.display_matrix()
 
     def render_sample_pattern(self):
+        if self.headless:
+            # In headless mode, just set some test colors
+            print("Headless mode: Setting test pattern in dot_colors array")
+            for row in range(self.height):
+                for col in range(self.width):
+                    # Simple pattern for testing
+                    if (row + col) % 2 == 0:
+                        self.dot_colors[row][col] = (100, 100, 255)
+                    else:
+                        self.dot_colors[row][col] = self.off_color
+            print(f"Pattern set for {self.width}x{self.height} matrix")
+            return
+            
         hi_w = self.width * self.supersample
         hi_h = self.height * self.supersample
         source_canvas = CanvasSource.from_size(hi_w, hi_h)
@@ -156,12 +179,12 @@ class DotMatrix:
     def wait_for_exit(self):
         if self.headless:
             # In headless mode, just sleep for a bit then exit
+            print("Headless mode: Waiting 5 seconds before exit...")
             try:
-                time.sleep(5)  # Display for 5 seconds
+                time.sleep(5)
             except KeyboardInterrupt:
-                pass
-            finally:
-                pygame.quit()
+                print("\nInterrupted by user")
+            print("Exiting headless mode")
         else:
             # Normal interactive mode with event loop
             try:
@@ -172,7 +195,8 @@ class DotMatrix:
                         if event.type == pygame.MOUSEBUTTONDOWN:
                             self.handle_click(event.pos)
                     
-                    self.clock.tick(40)  # 40 FPS
+                    if self.clock:
+                        self.clock.tick(40)  # 40 FPS
             except KeyboardInterrupt:
                 pass
             finally:
