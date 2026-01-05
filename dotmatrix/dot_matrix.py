@@ -69,7 +69,7 @@ class DotMatrix:
         }
 
     def _initialize_fpp(self, fpp_file):
-        fpp_buffer_size = self.width * self.height * 3  # 87 * 50 * 3 = 13,050 bytes
+        fpp_buffer_size = self.width * self.height * 3  # 90 * 50 * 3 = 13,500 bytes
         try:
             if not os.path.exists(fpp_file):
                 try:

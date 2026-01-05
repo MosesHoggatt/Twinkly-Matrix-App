@@ -24,10 +24,10 @@ def load_light_wall_mapping(csv_file="dotmatrix/Light Wall Mapping.csv"):
 
 
 def create_fpp_buffer_from_grid(dot_colors, mapping):
-    buffer = bytearray(13050)
+    buffer = bytearray(13500)
     for (grid_row, grid_col), pixel_index in mapping.items():
         if grid_row < len(dot_colors) and grid_col < len(dot_colors[0]):
-            if pixel_index < 0 or pixel_index >= 4350:
+            if pixel_index < 0 or pixel_index >= 4500:
                 continue
             red, green, blue = dot_colors[grid_row][grid_col]
             byte_index = pixel_index * 3
