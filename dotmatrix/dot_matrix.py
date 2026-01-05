@@ -206,7 +206,7 @@ class DotMatrix:
             pygame.draw.circle(self.screen, color, (dot_x, dot_y), self.dot_size)
 
     def visualize_matrix(self):
-        if self.headless:
+        if self.headless or not self.screen:
             return
             
         self.screen.fill(self.bg_color)
