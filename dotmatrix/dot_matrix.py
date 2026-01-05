@@ -96,6 +96,9 @@ class FPPOutput:
         self.memory_map = None
         self.file_handle = None
         self.routing_table = {}
+        self._fast_dest = None  # numpy-optimized destination indices
+        self._fast_src = None   # numpy-optimized source indices (flattened)
+        self._buffer_view = None  # numpy view over self.buffer for vectorized writes
         
         # Load mapping and initialize
         self.mapping = load_light_wall_mapping()
@@ -125,6 +128,9 @@ class FPPOutput:
         if not self.mapping:
             return
             
+        # Keep legacy dict for fallback path
+        dest_indices = []
+        src_indices = []
         for visual_row in range(self.height):
             for visual_col in range(self.width):
                 byte_indices = []
@@ -138,9 +144,18 @@ class FPPOutput:
                         pixel_idx = self.mapping[(physical_row, physical_col)]
                         if 0 <= pixel_idx < 4500:
                             byte_indices.append(pixel_idx * 3)
+                            dest_indices.append(pixel_idx)
+                            src_indices.append(visual_row * self.width + visual_col)
                 
                 if byte_indices:
                     self.routing_table[(visual_row, visual_col)] = byte_indices
+
+        # Build fast numpy paths if numpy is available
+        if HAS_NUMPY and dest_indices:
+            self._fast_dest = np.array(dest_indices, dtype=np.int32)
+            self._fast_src = np.array(src_indices, dtype=np.int32)
+            # View over buffer as (pixels,3)
+            self._buffer_view = np.frombuffer(self.buffer, dtype=np.uint8).reshape(-1, 3)
     
     def write(self, dot_colors):
         """Write color data to FPP buffer and flush to memory map.
@@ -153,14 +168,16 @@ class FPPOutput:
         
         start = time.perf_counter()
         
-        # Fast path: numpy arrays - write directly using routing table without tuple conversion
-        if isinstance(dot_colors, np.ndarray):
-            # Iterate through routing table and write bytes directly from numpy array
+        # Fast path: numpy arrays with precomputed indices (fully vectorized)
+        if isinstance(dot_colors, np.ndarray) and self._fast_dest is not None:
+            colors_flat = dot_colors.reshape(-1, 3)
+            # Vectorized scatter into buffer view
+            self._buffer_view[self._fast_dest] = colors_flat[self._fast_src]
+        elif isinstance(dot_colors, np.ndarray):
+            # Fallback numpy path using routing table
             for (row, col), byte_indices in self.routing_table.items():
-                # Get RGB values directly as integers (no tuple creation)
                 pixel = dot_colors[row, col]
                 r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
-                
                 for byte_idx in byte_indices:
                     self.buffer[byte_idx] = r
                     self.buffer[byte_idx + 1] = g
