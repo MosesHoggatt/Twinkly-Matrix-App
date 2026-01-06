@@ -37,9 +37,10 @@ def main():
         enable_performance_monitor=False,
         disable_blending=True,
         supersample=1,
-        # FPP passthrough - no correction to match preview
+        # FPP brightness reduction
         fpp_gamma=None,
-        fpp_color_order="RGB"
+        fpp_color_order="RGB",
+        fpp_channel_gains=(0.5, 0.5, 0.5)  # 50% brightness
     )
     
     # Create drawing surface directly
