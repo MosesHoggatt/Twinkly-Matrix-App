@@ -17,7 +17,7 @@ class Tetris:
         self.grid = numpy.full((self.blocks_height, self.blocks_width), False, dtype=bool)
         self.screen = canvas
 
-        self.block_image = pygame.image.load("assets/TetrisSquare_Red.png").convert_alpha()
+        self.block_image = pygame.image.load("assets/TetrisSquare_Red.png")
         self.block_image = pygame.transform.scale(self.block_image, (self.block_size,self.block_size))
 
         print(self.screen.get_width())
