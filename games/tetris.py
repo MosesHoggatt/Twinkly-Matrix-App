@@ -4,7 +4,7 @@ import sys
 import os
 import pygame
 import numpy
-
+import random
 
 class Tetris:
     def __init__(self, canvas, HEADLESS):
@@ -15,22 +15,33 @@ class Tetris:
         self.blocks_height = 20
         self.block_size = canvas.get_height() / self.blocks_height
         print(f"block_size: {self.block_size}")
-        self.grid = numpy.full((self.blocks_height, self.blocks_width), False, dtype=bool)
         self.screen = canvas
 
-        self.block_image = pygame.image.load("assets/TetrisSquare_Red.png")
-        self.block_image = pygame.transform.scale(self.block_image, (self.block_size,self.block_size))
+        self.block_images = [pygame.image.load("assets/tetris_blocks/TetrisSquare_Empty.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Blue.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Green.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Orange.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Purple.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Red.png"),
+            pygame.image.load("assets/tetris_blocks/TetrisSquare_Yellow.png")
+            ]
+        for index in range(len(self.block_images)):
+            self.block_images[index] = pygame.transform.scale(self.block_images[index], (self.block_size,self.block_size))
 
-        print(self.screen.get_width())
+        self.grid = [[]]
+        empty_block = "assets/tetris_blocks/TetrisSquare_Empty.png"
+        self.grid = [[random.randrange(0, len(self.block_images)) for element in range(self.blocks_width)] for row in range(self.blocks_height)]
+        print(self.grid)
 
     def tick(self): # Called in main
-        self.screen.fill((35,35,35))
-        
+        #self.screen.fill((35,35,35))
+
         if not self.headless:
             pygame.display.flip()
 
-        x_start = numpy.round(self.screen.get_width() / self.block_size).astype(int)
+        x_offset = numpy.round(self.screen.get_width() / self.block_size).astype(int)
         # Draw cells
-        for x in range(x_start, x_start - 1 - self.blocks_width, -1):
-            for y in range(self.blocks_height):
-                self.screen.blit(self.block_image, (x * self.block_size, y * self.block_size) )
+        for y_index, row in enumerate(self.grid):
+            for x_index, value in enumerate(row):
+                x_position = x_offset - x_index - 1
+                self.screen.blit(self.block_images[self.grid[y_index][x_index]], (x_position * self.block_size, y_index * self.block_size) )
