@@ -13,7 +13,7 @@ class Tetris:
         self.headless = HEADLESS
         self.blocks_width = 10
         self.blocks_height = 20
-        self.block_size = canvas.get_height() // self.blocks_height
+        self.block_size = 3
         print(f"block_size: {self.block_size}")
         self.screen = canvas
 
