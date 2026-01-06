@@ -37,9 +37,9 @@ def main():
         enable_performance_monitor=False,
         disable_blending=True,
         supersample=1,
-        # FPP color correction: inverse gamma to compensate for LED non-linearity
-        fpp_gamma=0.45,  # Inverse of 2.2 gamma (1/2.2 ≈ 0.45) brightens output
-        fpp_color_order="RGB"  # Try "GRB" if colors look wrong
+        # FPP passthrough - no correction to match preview
+        fpp_gamma=None,
+        fpp_color_order="RGB"
     )
     
     # Create drawing surface directly
