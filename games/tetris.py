@@ -3,32 +3,31 @@
 import sys
 import os
 import pygame
+import numpy
 
-def init_game(matrix, window_width, window_height):
-    pygame.init() # Redundant?
-    
-    blocks_width = 10
-    blocks_height = 20
-    grid = numpy.full((blocks_height, blocks_width), False, dtype=bool)
-    
-    screen = pygame.display.set_mode((window_width, window_height))
 
-    game_running = True
-    try:
-        while game_running:
-            screen.fill((255,255,255))
-            pygame.display.flip()
+class Tetris:
+    def __init__(self, canvas):
+        pygame.init() # Redundant?
+        
+        self.blocks_width = 10
+        self.blocks_height = 20
+        self.block_size = canvas.get_height() / self.blocks_height
+        print(f"block_size: {self.block_size}")
+        self.grid = numpy.full((self.blocks_height, self.blocks_width), False, dtype=bool)
+        self.screen = canvas
 
-    except KeyboardInterrupt:
-        pass
-    finally: 
-        matrix.shutdown 
-        pygame.quit()
-        sys.exit()
+        self.block_image = pygame.image.load("assets/TetrisSquare_Red.png").convert_alpha()
+        self.block_image = pygame.transform.scale(self.block_image, (self.block_size,self.block_size))
 
-def tick(): # Called in main
+        print(self.screen.get_width())
 
-    def draw_cells(grid):
-        for x in range(blocks_width):
-            for y in range(blocks_height):
-                pass
+    def tick(self): # Called in main
+        self.screen.fill((35,35,35))
+        pygame.display.flip()
+
+        x_start = numpy.round(self.screen.get_width() / self.block_size).astype(int)
+        # Draw cells
+        for x in range(x_start, x_start - 1 - self.blocks_width, -1):
+            for y in range(self.blocks_height):
+                self.screen.blit(self.block_image, (x * self.block_size, y * self.block_size) )

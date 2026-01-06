@@ -19,7 +19,8 @@ if HEADLESS:
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 # Import after setting environment variables
-from dotmatrix import DotMatrix, CanvasSource
+from dotmatrix import DotMatrix
+from games.tetris import Tetris
 import pygame
 
 print(f"Platform: {'Raspberry Pi' if ON_PI else 'Desktop'}")
@@ -32,23 +33,18 @@ def main():
     matrix = DotMatrix(
         headless=HEADLESS,
         fpp_output=ON_PI,
-        show_source_preview=False,
-        enable_performance_monitor=True
+        show_source_preview=True,
+        enable_performance_monitor=False
     )
     
-    # Create canvas
+    # Create drawing surface directly
     canvas_width = matrix.width * matrix.supersample
     canvas_height = matrix.height * matrix.supersample
-    canvas = CanvasSource.from_size(canvas_width, canvas_height)
+    canvas = pygame.Surface((canvas_width, canvas_height))
     
-    # Animation state
-    ball_x = canvas_width // 2
-    ball_y = canvas_height // 2
-    velocity_x = 3
-    velocity_y = 2
-    radius = 20
-    
-    # Animation loop
+    tetris = Tetris(canvas)
+
+    # Frame loop
     running = True
     frame_count = 0
     try:
@@ -59,7 +55,7 @@ def main():
                     if event.type == pygame.QUIT:
                         running = False
             
-            
+            tetris.tick()
             
             # Render to matrix
             matrix.render_frame(canvas)
@@ -77,25 +73,33 @@ if __name__ == "__main__":
     main()
 
 
-def animate_test_circle(canvas, ball_x, ball_y, velocity_x, velocity_y, radius, canvas_width, canvas_height):
-                """Update ball physics and render to canvas."""
-                # Update physics
-                ball_x += velocity_x
-                ball_y += velocity_y
+def animate_test_circle(canvas, canvas_width, canvas_height):
+    """Update ball physics and render to canvas."""
+           
+    # Animation state
+    ball_x = canvas_width // 2
+    ball_y = canvas_height // 2
+    velocity_x = 3
+    velocity_y = 2
+    radius = 20
                 
-                # Bounce off walls
-                if ball_x - radius < 0 or ball_x + radius > canvas_width:
-                    velocity_x *= -1
-                if ball_y - radius < 0 or ball_y + radius > canvas_height:
-                    velocity_y *= -1
-                
-                # Clear and redraw
-                canvas.surface.fill((0, 0, 0))
-                pygame.draw.circle(
-                    canvas.surface,
-                    (0, 200, 255),
-                    (int(ball_x), int(ball_y)),
-                    radius
-                )
-                
-                return ball_x, ball_y, velocity_x, velocity_y
+    # Update physics
+    ball_x += velocity_x
+    ball_y += velocity_y
+    
+    # Bounce off walls
+    if ball_x - radius < 0 or ball_x + radius > canvas_width:
+        velocity_x *= -1
+    if ball_y - radius < 0 or ball_y + radius > canvas_height:
+        velocity_y *= -1
+    
+    # Clear and redraw
+    canvas.fill((0, 0, 0))
+    pygame.draw.circle(
+        canvas,
+        (0, 200, 255),
+        (int(ball_x), int(ball_y)),
+        radius
+    )
+    
+    return ball_x, ball_y, velocity_x, velocity_y

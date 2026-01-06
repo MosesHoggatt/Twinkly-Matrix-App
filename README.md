@@ -31,7 +31,7 @@ pip install -r requirements.txt
 ## Quick Start
 
 ```python
-from dotmatrix import DotMatrix, CanvasSource
+from dotmatrix import DotMatrix
 import pygame
 
 # Create matrix
@@ -43,14 +43,14 @@ matrix = DotMatrix(
     max_fps=20
 )
 
-# Create canvas
-canvas = CanvasSource.from_size(270, 150)
+# Create drawing surface
+canvas = pygame.Surface((270, 150))
 
 # Render loop
 while True:
-    # Draw on canvas
-    canvas.surface.fill((0, 0, 0))
-    pygame.draw.circle(canvas.surface, (255, 0, 0), (135, 75), 30)
+    # Draw on surface
+    canvas.fill((0, 0, 0))
+    pygame.draw.circle(canvas, (255, 0, 0), (135, 75), 30)
     
     # Render to matrix
     matrix.render_frame(canvas)

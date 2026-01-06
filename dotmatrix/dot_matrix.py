@@ -14,7 +14,7 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-from .source_canvas import CanvasSource, SourcePreview
+from .source_preview import SourcePreview
 from .performance import PerformanceMonitor
 from .fpp_output import FPPOutput
 
@@ -84,7 +84,9 @@ class DotMatrix:
         # Optional components
         self.monitor = PerformanceMonitor(enabled=enable_performance_monitor)
         self.fpp = FPPOutput(width, height, fpp_memory_buffer_file) if fpp_output else None
-        self.preview = SourcePreview(width, height, enabled=show_source_preview)
+        # Scale preview window 6x for better visibility
+        preview_scale = 6
+        self.preview = SourcePreview(width * preview_scale, height * preview_scale, enabled=show_source_preview)
         
         # Cache for numpy optimization
         if HAS_NUMPY:
@@ -107,16 +109,16 @@ class DotMatrix:
         Main rendering pipeline: converts source surface to dot matrix.
         
         Args:
-            source_surface: pygame.Surface or CanvasSource to render
+            source_surface: pygame.Surface to render
         
         Returns:
             Total frame time in milliseconds
         """
         frame_start = time.perf_counter()
         
-        # Extract pygame surface
+        # Extract pygame surface if wrapped (backward compatibility)
         t1 = time.perf_counter()
-        if isinstance(source_surface, CanvasSource):
+        if hasattr(source_surface, 'surface'):
             source_surface = source_surface.surface
         
         # Update preview if enabled
