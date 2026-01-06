@@ -31,15 +31,12 @@ class Tetris:
         self.grid = [[]]
         empty_block = "assets/tetris_blocks/TetrisSquare_Empty.png"
         self.grid = [[random.randrange(0, len(self.block_images)) for element in range(self.blocks_width)] for row in range(self.blocks_height)]
-        print(self.grid)
-
-        y_offset = numpy.round(self.blocks_height - (self.screen.get_height() / self.block_size), decimals=0).astype(int)
-        print(f"y_offset: {y_offset}")
 
     def tick(self): # Called in main
         #self.screen.fill((35,35,35))
 
         if not self.headless:
+            self.screen.fill((35,35,35))
             pygame.display.flip()
 
         x_offset = self.screen.get_width() // self.block_size
