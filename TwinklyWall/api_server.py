@@ -112,8 +112,15 @@ def play_video_thread(video_path, loop, speed, brightness, playback_fps):
 def get_videos():
     """Get list of available source videos."""
     try:
+        # Ensure the source videos directory exists; create if missing
         if not source_videos_dir.exists():
-            return jsonify({'error': 'Source videos directory not found'}), 404
+            try:
+                source_videos_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                # If we cannot create the directory, still return an empty list
+                pass
+            # Return empty list instead of 404 so UI shows "No videos found"
+            return jsonify({'videos': []})
         
         videos = []
         for file in source_videos_dir.iterdir():

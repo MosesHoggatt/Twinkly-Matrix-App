@@ -135,6 +135,7 @@ desktop.ini
 # ============================================
 # Video files
 TwinklyWall/assets/source_videos/
+!TwinklyWall/assets/source_videos/.gitkeep
 *.mp4
 *.avi
 *.mov
@@ -143,6 +144,7 @@ TwinklyWall/assets/source_videos/
 
 # Rendered videos
 TwinklyWall/dotmatrix/rendered_videos/
+!TwinklyWall/dotmatrix/rendered_videos/.gitkeep
 *.rendered.mp4
 
 # Temporary files
