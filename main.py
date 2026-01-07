@@ -113,8 +113,8 @@ def main():
     if args.mode == "tetris":
         run_tetris(matrix)
     else:
-        # Default to Star-Spangled render if none specified
-        render_path = args.render or "dotmatrix/rendered_videos/Star-Spangled Banner - HD Video Background Loop_90x50_20fps.npz"
+        # Default to Shireworks render if none specified
+        render_path = args.render or "dotmatrix/rendered_videos/Shireworks - Trim_90x50_20fps.npz"
         loop = not args.no_loop  # Loop by default for video mode
         run_video(matrix, render_path, loop, args.speed, args.start, args.end, args.brightness, args.playback_fps)
 
