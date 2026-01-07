@@ -92,7 +92,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run LED Wall apps")
     parser.add_argument("--mode", choices=["tetris", "video"], default="video", help="App mode to run")
     parser.add_argument("--render", type=str, default=None, help="Path or name of rendered .npz (for video mode)")
-    parser.add_argument("--loop", action="store_true", help="Loop playback (video mode)")
+    parser.add_argument("--no-loop", action="store_true", help="Disable looping (video mode)")
     parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (video mode)")
     parser.add_argument("--playback-fps", type=float, default=None, help="Override playback FPS; adjusts speed relative to render")
     parser.add_argument("--start", type=int, default=0, help="Start frame (video mode)")
@@ -107,7 +107,8 @@ def main():
     else:
         # Default to Star-Spangled render if none specified
         render_path = args.render or "dotmatrix/rendered_videos/Star-Spangled Banner - HD Video Background Loop_90x50_40fps.npz"
-        run_video(matrix, render_path, args.loop, args.speed, args.start, args.end, args.brightness, args.playback_fps)
+        loop = not args.no_loop  # Loop by default for video mode
+        run_video(matrix, render_path, loop, args.speed, args.start, args.end, args.brightness, args.playback_fps)
 
 
 if __name__ == "__main__":
