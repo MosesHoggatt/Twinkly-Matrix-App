@@ -110,23 +110,21 @@ def play_video_thread(video_path, loop, speed, brightness, playback_fps):
 
 @app.route('/api/videos', methods=['GET'])
 def get_videos():
-    """Get list of available source videos."""
+    """Get list of available rendered videos (.npz)."""
     try:
-        # Ensure the source videos directory exists; create if missing
-        if not source_videos_dir.exists():
+        # Ensure the rendered videos directory exists; create if missing
+        if not rendered_videos_dir.exists():
             try:
-                source_videos_dir.mkdir(parents=True, exist_ok=True)
+                rendered_videos_dir.mkdir(parents=True, exist_ok=True)
             except Exception:
-                # If we cannot create the directory, still return an empty list
                 pass
-            # Return empty list instead of 404 so UI shows "No videos found"
             return jsonify({'videos': []})
-        
+
         videos = []
-        for file in source_videos_dir.iterdir():
-            if file.is_file() and file.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
+        for file in rendered_videos_dir.iterdir():
+            if file.is_file() and file.suffix.lower() == '.npz':
                 videos.append(file.name)
-        
+
         videos.sort()
         return jsonify({'videos': videos})
     except Exception as e:
@@ -148,11 +146,16 @@ def play_video():
         if not video_name:
             return jsonify({'error': 'No video specified'}), 400
         
-        # Find the corresponding rendered video
-        rendered_name = get_video_name_from_source(video_name)
-        if not rendered_name:
-            return jsonify({'error': f'No rendered version found for {video_name}'}), 404
-        
+        # Accept a rendered filename directly (preferred)
+        rendered_name = None
+        if video_name.endswith('.npz'):
+            rendered_name = video_name
+        else:
+            # Backward compatibility: map source name to rendered
+            rendered_name = get_video_name_from_source(video_name)
+            if not rendered_name:
+                return jsonify({'error': f'No rendered version found for {video_name}'}), 404
+
         rendered_path = rendered_videos_dir / rendered_name
         if not rendered_path.exists():
             return jsonify({'error': f'Rendered video not found: {rendered_name}'}), 404
