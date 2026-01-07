@@ -1,0 +1,19 @@
+[Unit]
+Description=TwinklyWall LED Matrix API Server
+After=network.target
+
+[Service]
+Type=simple
+User=fpp
+Group=fpp
+WorkingDirectory=/home/fpp/TwinklyWall
+Environment="PATH=/home/fpp/TwinklyWall/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/fpp/TwinklyWall/.venv/bin/python main.py --mode api
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

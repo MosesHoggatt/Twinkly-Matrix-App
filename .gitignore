@@ -1,17 +1,20 @@
-# Python
+# ============================================
+# TwinklyWall Project - Combined .gitignore
+# ============================================
+
+# ============================================
+# Python (TwinklyWall backend)
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -19,29 +22,156 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
 ENV/
 env/
 .venv
+TwinklyWall/.venv/
+TwinklyWall/venv/
 
-# IDE
+# Python build artifacts
+TwinklyWall/build/
+TwinklyWall/dist/
+
+# ============================================
+# Flutter/Dart (led_matrix_controller)
+# ============================================
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+led_matrix_controller/build/
+
+# Flutter native build artifacts
+led_matrix_controller/android/app/debug
+led_matrix_controller/android/app/profile
+led_matrix_controller/android/app/release
+led_matrix_controller/ios/Flutter/App.framework
+led_matrix_controller/ios/Flutter/Flutter.framework
+led_matrix_controller/ios/Flutter/Flutter.podspec
+led_matrix_controller/ios/Flutter/Generated.xcconfig
+led_matrix_controller/ios/Flutter/ephemeral/
+led_matrix_controller/ios/Pods/
+led_matrix_controller/linux/flutter/ephemeral/
+led_matrix_controller/macos/Flutter/ephemeral/
+led_matrix_controller/windows/flutter/ephemeral/
+
+# Android Studio will place build artifacts here
+led_matrix_controller/android/app/outputs/
+led_matrix_controller/android/app/debug/
+led_matrix_controller/android/app/profile/
+led_matrix_controller/android/app/release/
+
+# Generated files
+led_matrix_controller/**/*.g.dart
+led_matrix_controller/**/*.freezed.dart
+led_matrix_controller/**/*.mocks.dart
+led_matrix_controller/lib/generated_plugin_registrant.dart
+
+# ============================================
+# IDE and Editor Files
+# ============================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
-# OS
+# VSCode specific (keep some useful configs)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# ============================================
+# OS Generated Files
+# ============================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Project specific
+# ============================================
+# Project Specific
+# ============================================
+# Video files
+TwinklyWall/assets/source_videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Rendered videos
+TwinklyWall/dotmatrix/rendered_videos/
+*.rendered.mp4
+
+# Temporary files
 *.backup
-source_videos/
+*.tmp
+*.temp
 /dev/shm/
 
-# Keep documentation
+# Log files
+*.log
+logs/
+
+# ============================================
+# Documentation (KEEP THESE)
+# ============================================
 !README.md
 !*.md
+!TwinklyWall/README.md
+!led_matrix_controller/README.md
+!COMMUNICATION_GUIDE.md
+!IMPLEMENTATION_CHECKLIST.md
+!QUICKSTART.md
+!README_VIDEO_CONTROL.md
+!RUNNING_ON_FPP.md
+!SETUP_INSTRUCTIONS.md
+
+# ============================================
+# Assets to Keep
+# ============================================
+!TwinklyWall/assets/tetris_blocks/
+!led_matrix_controller/assets/
+!led_matrix_controller/web/
