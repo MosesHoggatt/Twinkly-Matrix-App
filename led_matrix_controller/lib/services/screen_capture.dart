@@ -1,19 +1,23 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-/// Screen capture service using FFmpeg x11grab (Linux) or GDI (Windows)
-/// This is the PROFESSIONAL approach for continuous screen capture
-/// NO sounds, NO popups, just raw pixel data from the display server
+/// Persistent FFmpeg stream for continuous screen capture
+/// Keeps FFmpeg running and streams raw RGB data for multiple frames
 class ScreenCaptureService {
   static const platform = MethodChannel('com.twinklywall.led_matrix_controller/screen_capture');
   
   static bool _isCapturingDesktop = false;
   static Process? _ffmpegProcess;
-  static bool _ffmpegAvailable = false;
-  static bool _ffmpegChecked = false;
+  static bool _streamInitialized = false;
+  
+  // Frame dimensions - will auto-detect from display
+  static int _screenWidth = 1920;
+  static int _screenHeight = 1080;
+  static const int _targetWidth = 90;
+  static const int _targetHeight = 100;
+  static const int _bytesPerPixel = 3; // RGB24
 
   /// Start capturing the screen
   static Future<bool> startCapture() async {
@@ -25,10 +29,17 @@ class ScreenCaptureService {
         _isCapturingDesktop = true;
         debugPrint("[START] Desktop screen capture started");
         
-        // Check if FFmpeg is available
-        if (!_ffmpegChecked) {
-          _ffmpegAvailable = await _checkFFmpeg();
-          _ffmpegChecked = true;
+        // Detect screen size
+        await _detectScreenSize();
+        
+        // Start persistent FFmpeg stream
+        final success = await _startFFmpegStream();
+        if (success) {
+          _streamInitialized = true;
+          debugPrint("[START] FFmpeg stream initialized successfully");
+        } else {
+          debugPrint("[START] Failed to initialize FFmpeg stream");
+          return false;
         }
         
         return true;
@@ -42,18 +53,65 @@ class ScreenCaptureService {
     }
   }
 
-  /// Check if FFmpeg is available
-  static Future<bool> _checkFFmpeg() async {
+  /// Detect screen resolution using xrandr
+  static Future<void> _detectScreenSize() async {
     try {
-      final result = await Process.run('ffmpeg', ['-version']);
-      final available = result.exitCode == 0;
-      debugPrint("[FFMPEG] Available: $available");
-      if (available) {
-        debugPrint("[FFMPEG] Version: ${result.stdout.toString().split('\n').first}");
+      final result = await Process.run('xrandr', []).timeout(const Duration(seconds: 2));
+      final output = result.stdout.toString();
+      
+      // Parse xrandr output for primary display resolution
+      // Format: "HDMI-1 connected primary 1920x1080+0+0"
+      final lines = output.split('\n');
+      for (final line in lines) {
+        if (line.contains('connected primary')) {
+          final match = RegExp(r'(\d+)x(\d+)').firstMatch(line);
+          if (match != null) {
+            _screenWidth = int.parse(match.group(1)!);
+            _screenHeight = int.parse(match.group(2)!);
+            debugPrint("[DETECT] Screen size: ${_screenWidth}x${_screenHeight}");
+            return;
+          }
+        }
       }
-      return available;
     } catch (e) {
-      debugPrint("[FFMPEG] Not found: $e");
+      debugPrint("[DETECT] Could not detect screen size: $e, using default 1920x1080");
+    }
+  }
+
+  /// Start persistent FFmpeg process that streams raw RGB data
+  static Future<bool> _startFFmpegStream() async {
+    try {
+      debugPrint("[FFMPEG] Starting persistent stream");
+      debugPrint("[FFMPEG] Display: :0.0, Resolution: ${_screenWidth}x${_screenHeight}");
+      
+      // Kill any existing process
+      _ffmpegProcess?.kill();
+      
+      // Start FFmpeg with x11grab, output raw RGB24 to stdout
+      // This process will run continuously and stream frames
+      _ffmpegProcess = await Process.start(
+        'ffmpeg',
+        [
+          '-loglevel', 'quiet',           // Suppress FFmpeg output
+          '-f', 'x11grab',                // X11 screen capture input
+          '-video_size', '${_screenWidth}x${_screenHeight}',
+          '-framerate', '30',             // Source framerate
+          '-i', ':0.0',                   // X11 display :0.0
+          '-pix_fmt', 'rgb24',            // Output format: RGB24 (3 bytes per pixel)
+          '-f', 'rawvideo',               // Raw video output format
+          'pipe:1'                        // Write to stdout
+        ],
+      );
+      
+      if (_ffmpegProcess == null) {
+        debugPrint("[FFMPEG] Failed to start process");
+        return false;
+      }
+      
+      debugPrint("[FFMPEG] Process started, PID: ${_ffmpegProcess!.pid}");
+      return true;
+    } catch (e) {
+      debugPrint("[FFMPEG] Failed to start stream: $e");
       return false;
     }
   }
@@ -66,6 +124,15 @@ class ScreenCaptureService {
         return true;
       } else if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
         _isCapturingDesktop = false;
+        _streamInitialized = false;
+        
+        // Kill FFmpeg process
+        if (_ffmpegProcess != null) {
+          _ffmpegProcess!.kill();
+          _ffmpegProcess = null;
+          debugPrint("[STOP] FFmpeg process killed");
+        }
+        
         debugPrint("[STOP] Desktop screen capture stopped");
         return true;
       }
@@ -83,7 +150,7 @@ class ScreenCaptureService {
         final bool result = await platform.invokeMethod('isCapturing');
         return result;
       } else if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-        return _isCapturingDesktop;
+        return _isCapturingDesktop && _streamInitialized && _ffmpegProcess != null;
       }
       return false;
     } on PlatformException catch (e) {
@@ -92,31 +159,36 @@ class ScreenCaptureService {
     }
   }
 
-  /// Capture a single screenshot
+  /// Capture a single screenshot from the persistent stream
   static Future<Uint8List?> captureScreenshot() async {
     final startTime = DateTime.now();
     debugPrint("[CAPTURE] ======== NEW FRAME ========");
-    debugPrint("[CAPTURE] Starting at ${startTime.toIso8601String()}");
     
     try {
       if (Platform.isAndroid) {
-        debugPrint("[CAPTURE] Using Android method channel");
         final result = await platform.invokeMethod('captureScreenshot');
         if (result is Uint8List) {
-          debugPrint("[CAPTURE] Android returned ${result.length} bytes");
           return result;
         }
-        debugPrint("[CAPTURE] Android returned null");
         return null;
-      } else if (Platform.isLinux) {
-        final result = await _captureScreenshotLinuxFFmpeg();
+      } else if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+        if (!_streamInitialized || _ffmpegProcess == null) {
+          debugPrint("[CAPTURE] Stream not initialized!");
+          return null;
+        }
+        
+        // Read one frame from FFmpeg stdout
+        final frameData = await _readFrameFromStream();
+        if (frameData == null) {
+          return null;
+        }
+        
         final totalTime = DateTime.now().difference(startTime);
         debugPrint("[CAPTURE] Total frame time: ${totalTime.inMilliseconds}ms");
-        return result;
+        
+        // Process the raw RGB data
+        return await _processRawRGBData(frameData);
       }
-      return null;
-    } on PlatformException catch (e) {
-      debugPrint("[CAPTURE] PlatformException: ${e.message}");
       return null;
     } catch (e) {
       debugPrint("[CAPTURE] Unexpected error: $e");
@@ -124,112 +196,108 @@ class ScreenCaptureService {
     }
   }
 
-  /// Capture screenshot on Linux using FFmpeg x11grab
-  /// This is MUCH better: direct access to X11 framebuffer, no sounds, no popups
-  static Future<Uint8List?> _captureScreenshotLinuxFFmpeg() async {
-    final captureStartTime = DateTime.now();
-    debugPrint("[FFMPEG] Starting single frame capture");
+  /// Read one complete frame from FFmpeg stdout
+  /// FFmpeg outputs raw RGB24: width * height * 3 bytes per frame
+  static Future<Uint8List?> _readFrameFromStream() async {
+    final readStartTime = DateTime.now();
     
     try {
-      // Use FFmpeg to grab one frame from X11 display
-      // -f x11grab = use X11 video input device
-      // -video_size <display_size> = size of the display
-      // -i :0.0 = X11 display :0.0
-      // -frames:v 1 = capture only 1 frame
-      // -f image2pipe = output to stdout as image
-      // -vcodec png = encode as PNG
-      // pipe:1 = write to stdout
-      
-      debugPrint("[FFMPEG] Running: ffmpeg -f x11grab -video_size 1920x1080 -i :0.0 -frames:v 1 -f image2pipe -vcodec png pipe:1");
-      
-      final result = await Process.run(
-        'ffmpeg',
-        [
-          '-loglevel', 'quiet',        // Suppress FFmpeg output
-          '-f', 'x11grab',             // X11 screen capture input
-          '-video_size', '1920x1080',  // TODO: Auto-detect screen size
-          '-i', ':0.0',                // X11 display :0.0
-          '-frames:v', '1',            // Capture exactly 1 frame
-          '-f', 'image2pipe',          // Output format: image to pipe
-          '-vcodec', 'png',            // PNG codec
-          'pipe:1'                     // Write to stdout
-        ],
-        stdoutEncoding: null, // Binary output
-      );
-      
-      final captureDuration = DateTime.now().difference(captureStartTime);
-      debugPrint("[FFMPEG] Capture took ${captureDuration.inMilliseconds}ms");
-      
-      if (result.exitCode != 0) {
-        debugPrint("[FFMPEG] ERROR: Exit code ${result.exitCode}");
-        if (result.stderr.toString().isNotEmpty) {
-          debugPrint("[FFMPEG] Stderr: ${result.stderr}");
-        }
+      if (_ffmpegProcess == null) {
+        debugPrint("[STREAM] Process is null");
         return null;
       }
       
-      final imageBytes = result.stdout as Uint8List;
-      debugPrint("[FFMPEG] Captured ${imageBytes.length} bytes");
+      final frameSize = _screenWidth * _screenHeight * _bytesPerPixel;
+      debugPrint("[STREAM] Reading frame: $frameSize bytes (${_screenWidth}x${_screenHeight} @ 3bpp)");
       
-      // Process the PNG data
-      return await _processImageBytes(imageBytes);
-    } catch (e, stackTrace) {
-      debugPrint("[FFMPEG] Capture failed: $e");
-      debugPrint("[FFMPEG] Stack trace: $stackTrace");
+      // Read exactly frameSize bytes from stdout
+      final frameBytes = <int>[];
+      final stdout = _ffmpegProcess!.stdout;
+      
+      // Read in chunks to avoid blocking
+      while (frameBytes.length < frameSize) {
+        final chunk = await stdout
+            .take(frameSize - frameBytes.length)
+            .expand((list) => list)
+            .toList();
+        if (chunk.isEmpty) {
+          debugPrint("[STREAM] EOF reached or process died");
+          _streamInitialized = false;
+          return null;
+        }
+        frameBytes.addAll(chunk);
+      }
+      
+      final readDuration = DateTime.now().difference(readStartTime);
+      debugPrint("[STREAM] Read complete in ${readDuration.inMilliseconds}ms");
+      
+      return Uint8List.fromList(frameBytes);
+    } catch (e) {
+      debugPrint("[STREAM] Error reading frame: $e");
+      _streamInitialized = false;
       return null;
     }
   }
 
-  /// Process image bytes: decode, scale to 90x100, convert to RGB
-  static Future<Uint8List?> _processImageBytes(Uint8List imageBytes) async {
+  /// Process raw RGB24 data: resize to 90x100, return as RGB
+  static Future<Uint8List?> _processRawRGBData(Uint8List rgbData) async {
     final processStartTime = DateTime.now();
-    debugPrint("[PROCESS] Input: ${imageBytes.length} bytes");
+    debugPrint("[PROCESS] Input: ${rgbData.length} bytes (raw RGB24)");
     
     try {
-      // Step 1: Decode image
+      // Decode raw RGB24 to Image object - create Image from raw RGB bytes
       final decodeStartTime = DateTime.now();
-      final image = img.decodeImage(imageBytes);
+      final image = img.Image(
+        width: _screenWidth,
+        height: _screenHeight,
+      );
+      
+      // Copy RGB data into image
+      var dataOffset = 0;
+      for (var y = 0; y < _screenHeight; y++) {
+        for (var x = 0; x < _screenWidth; x++) {
+          final r = rgbData[dataOffset++];
+          final g = rgbData[dataOffset++];
+          final b = rgbData[dataOffset++];
+          image.setPixelRgba(x, y, r, g, b, 255);
+        }
+      }
+      
       final decodeDuration = DateTime.now().difference(decodeStartTime);
       debugPrint("[PROCESS] Decode: ${decodeDuration.inMilliseconds}ms");
 
-      if (image == null) {
-        debugPrint("[PROCESS] ERROR: Failed to decode image");
-        return null;
-      }
-      debugPrint("[PROCESS] Original size: ${image.width}x${image.height}");
-
-      // Step 2: Resize to 90x100
+      // Resize to 90x100
       final resizeStartTime = DateTime.now();
       final resized = img.copyResize(
         image,
-        width: 90,
-        height: 100,
+        width: _targetWidth,
+        height: _targetHeight,
         interpolation: img.Interpolation.linear,
       );
       final resizeDuration = DateTime.now().difference(resizeStartTime);
       debugPrint("[PROCESS] Resize: ${resizeDuration.inMilliseconds}ms");
 
-      // Step 3: Convert to raw RGB data (27,000 bytes: 90 * 100 * 3)
+      // Convert to raw RGB data (27,000 bytes: 90 * 100 * 3)
       final convertStartTime = DateTime.now();
-      final rgbData = Uint8List(27000);
-      int offset = 0;
+      final outputSize = _targetWidth * _targetHeight * _bytesPerPixel;
+      final rgbOutput = Uint8List(outputSize);
+      var outputOffset = 0;
 
       for (final pixel in resized) {
-        rgbData[offset++] = pixel.r.toInt();
-        rgbData[offset++] = pixel.g.toInt();
-        rgbData[offset++] = pixel.b.toInt();
+        rgbOutput[outputOffset++] = pixel.r.toInt();
+        rgbOutput[outputOffset++] = pixel.g.toInt();
+        rgbOutput[outputOffset++] = pixel.b.toInt();
       }
       final convertDuration = DateTime.now().difference(convertStartTime);
       debugPrint("[PROCESS] RGB conversion: ${convertDuration.inMilliseconds}ms");
 
       final totalProcessDuration = DateTime.now().difference(processStartTime);
       debugPrint("[PROCESS] Total processing: ${totalProcessDuration.inMilliseconds}ms");
-      debugPrint("[PROCESS] Output: ${rgbData.length} bytes");
+      debugPrint("[PROCESS] Output: ${rgbOutput.length} bytes");
       
-      return rgbData;
-    } catch (e, stackTrace) {
+      return rgbOutput;
+    } catch (e) {
       debugPrint("[PROCESS] Error: $e");
-      debugPrint("[PROCESS] Stack trace: $stackTrace");
       return null;
     }
   }

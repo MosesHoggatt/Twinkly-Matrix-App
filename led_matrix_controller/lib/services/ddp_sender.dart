@@ -72,22 +72,17 @@ class DDPSender {
   static Uint8List _buildDdpPacketStatic(Uint8List rgbData) {
     final packet = BytesBuilder();
 
-    // DDP Header (10 bytes)
-    // Flags and protocol
-    packet.addByte(0x00); // Protocol identifier
+    // DDP Header (10 bytes) - CORRECTED for FPP compatibility
+    packet.addByte(0x41); // Protocol identifier (0x41 for DDP)
     packet.addByte(0x01); // Flags (0x01 for end-of-frame)
+    packet.addByte(0x00); // Sequence number high
+    packet.addByte(0x00); // Sequence number low
+    packet.addByte(0x00); // Data type (0x00 for RGB pixel data)
+    packet.addByte(0x00); // Reserved
+    packet.addByte(0x00); // Reserved
 
-    // Sequence number
-    packet.addByte(0x00);
-    packet.addByte(0x00);
-
-    // Reserved
-    packet.addByte(0x00);
-    packet.addByte(0x00);
-
-    // Data length (big-endian)
+    // Data length (big-endian, 3 bytes for < 16MB)
     final dataLength = rgbData.length;
-    packet.addByte((dataLength >> 24) & 0xFF);
     packet.addByte((dataLength >> 16) & 0xFF);
     packet.addByte((dataLength >> 8) & 0xFF);
     packet.addByte(dataLength & 0xFF);

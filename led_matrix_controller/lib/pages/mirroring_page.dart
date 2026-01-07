@@ -41,35 +41,60 @@ class _MirroringPageState extends ConsumerState<MirroringPage> {
     
     setState(() {
       isCapturing = true;
-      statusMessage = "Capturing...";
+      statusMessage = "Initializing capture...";
       frameCount = 0;
     });
+
+    debugPrint("[MIRRORING] Starting desktop capture, target FPP: $fppIp:4048");
 
     // Capture at ~20 FPS (50ms per frame)
     while (isCapturing) {
       try {
+        final captureStart = DateTime.now();
         final screenshotData = await ScreenCaptureService.captureScreenshot();
+        final captureDuration = DateTime.now().difference(captureStart);
+        
         if (screenshotData != null) {
+          if (screenshotData.length != 27000) {
+            debugPrint("[MIRRORING] WARNING: Frame size ${screenshotData.length} != 27000");
+          }
+          
+          debugPrint("[MIRRORING] Sending frame $frameCount (${screenshotData.length} bytes) to $fppIp");
+          
           // Send to FPP via DDP
-          await DDPSender.sendFrameStatic(fppIp, screenshotData);
+          final sendStart = DateTime.now();
+          final sent = await DDPSender.sendFrameStatic(fppIp, screenshotData);
+          final sendDuration = DateTime.now().difference(sendStart);
+          
+          if (sent) {
+            debugPrint("[MIRRORING] ✓ Frame $frameCount sent in ${sendDuration.inMilliseconds}ms (capture: ${captureDuration.inMilliseconds}ms)");
+          } else {
+            debugPrint("[MIRRORING] ✗ Failed to send frame $frameCount");
+          }
           
           setState(() {
             frameCount++;
-            if (frameCount % 20 == 0) {
-              statusMessage = "Capturing... (Frames: $frameCount)";
+            if (frameCount % 5 == 0) {
+              final fps = (1000 / (captureDuration.inMilliseconds + sendDuration.inMilliseconds)).toStringAsFixed(1);
+              statusMessage = "Streaming... ($frameCount frames @ ~$fps FPS)";
             }
           });
         } else {
+          debugPrint("[MIRRORING] Screenshot capture returned null");
           setState(() {
             statusMessage = "Failed to capture screenshot - check logs";
           });
           break;
         }
         
-        // Wait ~50ms for ~20 FPS
-        await Future.delayed(const Duration(milliseconds: 50));
+        // Wait ~50ms for ~20 FPS (adjust based on capture + send time)
+        final totalTime = captureDuration.inMilliseconds;
+        final remainingWait = (50 - totalTime).clamp(0, 50);
+        if (remainingWait > 0) {
+          await Future.delayed(Duration(milliseconds: remainingWait));
+        }
       } catch (e) {
-        debugPrint("[MirroringPage] Error: $e");
+        debugPrint("[MIRRORING] Error: $e");
         setState(() {
           statusMessage = "Capture error: $e";
         });
