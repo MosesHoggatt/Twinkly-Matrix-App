@@ -79,7 +79,7 @@ def build_matrix():
         headless=HEADLESS,
         fpp_output=ON_PI,
         show_source_preview=True,
-        enable_performance_monitor=False,
+        enable_performance_monitor=True,
         disable_blending=True,
         supersample=1,
         # Keep FPP options configurable later; defaults here
@@ -94,7 +94,7 @@ def main():
     parser.add_argument("--render", type=str, default=None, help="Path or name of rendered .npz (for video mode)")
     parser.add_argument("--no-loop", action="store_true", help="Disable looping (video mode)")
     parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (video mode)")
-    parser.add_argument("--playback-fps", type=float, default=None, help="Override playback FPS; adjusts speed relative to render")
+    parser.add_argument("--playback-fps", type=float, default=20.0, help="Override playback FPS; adjusts speed relative to render")
     parser.add_argument("--start", type=int, default=0, help="Start frame (video mode)")
     parser.add_argument("--end", type=int, default=None, help="End frame (exclusive, video mode)")
     parser.add_argument("--brightness", type=float, default=None, help="Optional brightness scalar (0-1 or 0-255) for video mode")
@@ -106,7 +106,7 @@ def main():
         run_tetris(matrix)
     else:
         # Default to Star-Spangled render if none specified
-        render_path = args.render or "dotmatrix/rendered_videos/Star-Spangled Banner - HD Video Background Loop_90x50_40fps.npz"
+        render_path = args.render or "dotmatrix/rendered_videos/Star-Spangled Banner - HD Video Background Loop_90x50_20fps.npz"
         loop = not args.no_loop  # Loop by default for video mode
         run_video(matrix, render_path, loop, args.speed, args.start, args.end, args.brightness, args.playback_fps)
 

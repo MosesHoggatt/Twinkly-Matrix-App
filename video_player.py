@@ -105,6 +105,19 @@ class VideoPlayer:
         if start_frame >= end_frame:
             return 0
 
+        # Logging: playback configuration
+        target_label = "FPP" if getattr(self.matrix, "fpp", None) else "Preview"
+        print("\n[VideoPlayer] Starting playback")
+        print(f"  Target: {target_label}, Headless: {getattr(self.matrix, 'headless', None)}")
+        print(f"  Render file: {clip['path']}")
+        print(f"  Render fps: {fps:.2f}")
+        effective_fps = fps * max(1e-3, speed)
+        print(f"  Playback fps: {effective_fps:.2f} (speed={speed:.3f})")
+        print(f"  Frames: start={start_frame}, end={end_frame}, total={total}")
+        print(f"  Loop: {loop}, Repeat: {repeat if repeat is not None else 1 if not loop else 'inf'}")
+        if brightness is not None:
+            print(f"  Brightness scale: {brightness}")
+
         # Compute frame timing
         target_fps = max(1e-3, fps * max(1e-3, speed))
         frame_dt = 1.0 / target_fps
@@ -144,6 +157,8 @@ class VideoPlayer:
                     if sleep_time > 0:
                         time.sleep(sleep_time)
                     frames_rendered += 1
+                    if frames_rendered % 200 == 0:
+                        print(f"  Progress: {frames_rendered} frames rendered")
                 if not infinite:
                     if remaining is None:
                         remaining = 0
@@ -151,6 +166,8 @@ class VideoPlayer:
                         remaining -= 1
         except KeyboardInterrupt:
             pass
+
+        print(f"[VideoPlayer] Playback finished, frames rendered: {frames_rendered}")
 
         return frames_rendered
 
